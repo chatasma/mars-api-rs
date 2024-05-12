@@ -110,7 +110,8 @@ pub struct PlayerStats {
     pub weapon_kills: HashMap<String, u32>,
     pub weapon_deaths: HashMap<String, u32>,
     pub killstreaks: HashMap<u32, u32>,
-    pub killstreaks_ended: HashMap<u32, u32>
+    pub killstreaks_ended: HashMap<u32, u32>,
+    pub achievements: HashMap<String, AchievementData>
 }
 
 impl PlayerStats {
@@ -189,7 +190,8 @@ impl Default for PlayerStats {
             weapon_kills: HashMap::new(),
             weapon_deaths: HashMap::new(),
             killstreaks: HashMap::new(),
-            killstreaks_ended: HashMap::new()
+            killstreaks_ended: HashMap::new(),
+            achievements: HashMap::new()
         }
     }
 }
@@ -310,6 +312,13 @@ pub struct PlayerMessages {
     pub global: u32,
     pub team: u32,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AchievementData {
+    pub completion_time: u64
+}
+
 
 impl PlayerMessages {
     pub fn total(&self) -> u32 {

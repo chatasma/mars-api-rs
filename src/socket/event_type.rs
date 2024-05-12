@@ -6,6 +6,7 @@ use strum_macros::{EnumString, Display};
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum EventType {
     // API-bound
+    AchievementEarn,
     MatchLoad,
     MatchStart,
     MatchEnd,
@@ -34,5 +35,6 @@ pub enum EventType {
     PlayerXpGain,
     ForceMatchEnd,
     Message,
-    DisconnectPlayer
+    DisconnectPlayer,
+    PlayerUpdate
 }

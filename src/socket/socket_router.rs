@@ -6,9 +6,10 @@ use rocket::serde::{json::{serde_json, Value}, DeserializeOwned};
 
 use uuid::Uuid;
 
-use crate::{socket::r#match::match_phase_listener::MatchPhaseListener, util::{r#macro::unwrap_helper, time::get_u64_time_millis}, database::models::{r#match::{MatchState, FirstBlood}, player::Player, participant::{Participant, SimpleParticipant}, death::Death}};
+use crate::{database::models::{death::Death, achievement::Achievement, r#match::{FirstBlood, MatchState}, participant::{Participant, SimpleParticipant}, player::{AchievementData, Player}}, socket::r#match::match_phase_listener::MatchPhaseListener, util::{r#macro::unwrap_helper, time::get_u64_time_millis}};
 
-use super::{server::{server_context::{ServerContext}, server_events::MatchLoadData}, event_type::EventType, r#match::match_events::{MatchStartData, MatchEndData}, participant::{participant_stat_listener::ParticipantStatListener, participant_party_listener::ParticipantPartyListener}, player::{player_listener::PlayerListener, player_stat_listener::PlayerStatListener, player_events::{PlayerDeathData, PlayerChatData, KillstreakData, PartyJoinData, PartyLeaveData}, player_gamemode_stat_listener::PlayerGamemodeStatListener, player_xp_listener::PlayerXPListener, player_record_listener::PlayerRecordListener}, map::map_record_listener::MapRecordListener, leaderboard::leaderboard_listener::LeaderboardListener, objective::objective_events::{DestroyableDamageData, DestroyableDestroyData, CoreLeakData, ControlPointCaptureData, FlagDropData, FlagEventData, WoolDropData, WoolEventData}};
+use super::{event_type::EventType, leaderboard::leaderboard_listener::LeaderboardListener, map::map_record_listener::MapRecordListener, r#match::match_events::{MatchEndData, MatchStartData}, objective::objective_events::{ControlPointCaptureData, CoreLeakData, DestroyableDamageData, DestroyableDestroyData, FlagDropData, FlagEventData, WoolDropData, WoolEventData}, participant::{participant_party_listener::ParticipantPartyListener, participant_stat_listener::ParticipantStatListener}, player::{player_events::{KillstreakData, PartyJoinData, PartyLeaveData, PlayerAchievementData, PlayerChatData, PlayerDeathData}, player_gamemode_stat_listener::PlayerGamemodeStatListener, player_listener::PlayerListener, player_record_listener::PlayerRecordListener, player_stat_listener::PlayerStatListener, player_xp_listener::PlayerXPListener}, server::{server_context::ServerContext, server_events::MatchLoadData}, update::player_update_listener::PlayerUpdateListener};
+use crate::database::Database;
 
 pub struct SocketRouter {
     pub server: ServerContext,
@@ -45,6 +46,7 @@ impl SocketRouter {
                 Box::new(PlayerGamemodeStatListener {}),
                 Box::new(PlayerXPListener {}),
                 Box::new(PlayerRecordListener {}),
+                Box::new(PlayerUpdateListener {}),
             ]
         }
     }
@@ -71,6 +73,7 @@ impl SocketRouter {
             EventType::WoolDrop =>                              self.on_wool_drop(Self::parse_data(data)).await,
             EventType::WoolDefend =>                            self.on_wool_defend(Self::parse_data(data)).await,
             EventType::ControlPointCapture =>                   self.on_control_point_capture(Self::parse_data(data)).await,
+            EventType::AchievementEarn =>                       self.on_achievement_complete(Self::parse_data(data)).await,
             _ => {warn!("Event (srv {}) fell through router: {} - {}", self.server.id, event_type, data.to_string()); return}
         };
         match response {
@@ -648,6 +651,23 @@ impl SocketRouter {
             };
         }
         self.server.api_state.match_cache.set(&self.server.api_state.database, &current_match.id, &current_match, false).await;
+        Ok(())
+    }
+
+    async fn on_achievement_complete(&mut self, data: PlayerAchievementData) -> Result<(), SocketError> {
+        // confirm the achievement exists
+        let achievement_exists = Database::find_by_id(&self.server.api_state.database.achievements, data.achievement_id.as_str()).await.is_some();
+        if !achievement_exists {
+            return Ok(());
+        }
+        let mut player = unwrap_helper::return_default!(
+            self.server.api_state.player_cache.get(&self.server.api_state.database, data.player.name.as_str()).await,
+            Ok(())
+        );
+        player.stats.achievements.insert(data.achievement_id.clone(), AchievementData {
+            completion_time: data.completion_time
+        });
+        self.server.api_state.player_cache.set(&self.server.api_state.database, &player.name, &player, true).await;
         Ok(())
     }
 

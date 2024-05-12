@@ -8,3 +8,4 @@ pub mod participant;
 pub mod player;
 pub mod map;
 pub mod objective;
+pub mod update;

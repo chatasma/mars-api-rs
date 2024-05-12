@@ -150,6 +150,22 @@ impl ApiErrorResponder {
             "A tag already exists with that name"
         )
     }
+
+    pub fn achievement_missing() -> Self {
+        ApiErrorResponder::create_api_error_responder(
+            Status::NotFound, 
+            &ApiExceptionType::AchievementMising, 
+            "The achievement does not exist"
+        )
+    }
+
+    pub fn achievement_conflict() -> Self {
+        ApiErrorResponder::create_api_error_responder(
+            Status::Conflict,
+            &ApiExceptionType::AchievementConflict, 
+            "An achievement already exists with that name"
+        )
+    }
 }
 
 impl<'r> Responder<'r, 'static> for ApiErrorResponder {
@@ -215,6 +231,8 @@ enum ApiExceptionType {
     TagAlreadyPresent,
     TagNotPresent,
     MapMissing,
+    AchievementConflict,
+    AchievementMising,
     PunishmentMissing,
     NoteMissing,
     Anonymous

@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::database::models::{player::SimplePlayer, death::DamageCause};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerDeathData {
     pub victim: SimplePlayer,
@@ -28,7 +28,7 @@ impl PlayerDeathData {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerChatData {
     pub player: SimplePlayer,
@@ -38,7 +38,7 @@ pub struct PlayerChatData {
     pub server_id: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ChatChannel {
     Staff,
@@ -89,4 +89,12 @@ pub struct PlayerXPGainData {
 pub struct DisconnectPlayerData {
     pub player_id: String,
     pub reason: String
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerAchievementData { 
+    pub player: SimplePlayer, 
+    pub achievement_id: String, 
+    pub completion_time: u64
 }

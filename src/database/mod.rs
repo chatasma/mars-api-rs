@@ -11,7 +11,7 @@ use anyhow::anyhow;
 
 use crate::{database::models::player::Player, util::r#macro::unwrap_helper};
 
-use self::models::{session::Session, punishment::Punishment, rank::Rank, r#match::Match, level::Level, death::Death};
+use self::models::{achievement::Achievement, death::Death, level::Level, r#match::Match, punishment::Punishment, rank::Rank, session::Session};
 
 pub mod models;
 pub mod cache;
@@ -24,6 +24,7 @@ pub trait CollectionOwner<T> {
 pub struct Database {
     pub mongo: mongodb::Database,
     pub tags: Collection<Tag>,
+    pub achievements: Collection<Achievement>,
     pub players: Collection<Player>,
     pub sessions: Collection<Session>,
     pub punishments: Collection<Punishment>,
@@ -190,6 +191,7 @@ pub async fn connect(db_url: &String, min_pool_size: Option<u32>, max_pool_size:
     };
 
     let tags = db.collection::<Tag>(Tag::get_collection_name());
+    let achievements = db.collection::<Achievement>(Achievement::get_collection_name());
     let players = db.collection::<Player>(Player::get_collection_name());
     let sessions = db.collection::<Session>(Session::get_collection_name());
     let punishments = db.collection::<Punishment>(Punishment::get_collection_name());
@@ -199,5 +201,8 @@ pub async fn connect(db_url: &String, min_pool_size: Option<u32>, max_pool_size:
     let deaths = db.collection::<Death>(Death::get_collection_name());
 
     info!("Connected to database successfully.");
-    Ok(Database { mongo: db, tags, players, sessions, punishments, ranks, matches, levels, deaths })
+    Ok(Database { 
+        mongo: db, tags, achievements, players, sessions, 
+        punishments, ranks, matches, levels, deaths 
+    })
 }

@@ -60,7 +60,8 @@ fn rocket(state: MarsAPIState) -> Rocket<Build> {
         &http::perks::mount,
         &http::leaderboard::mount,
         &http::report::mount,
-        &http::r#match::mount
+        &http::r#match::mount,
+        &http::achievements::mount
     ];
     let is_debug = env::var("MARS_DEBUG").unwrap_or("false".to_owned()).parse::<bool>().unwrap_or(false);
     let http_port = env::var("MARS_HTTP_PORT").unwrap_or("8000".to_owned()).parse::<u32>().unwrap_or(8000);

@@ -11,3 +11,4 @@ pub mod leaderboard;
 pub mod tag;
 pub mod perks;
 pub mod r#match;
+pub mod achievements;

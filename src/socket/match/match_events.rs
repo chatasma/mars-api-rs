@@ -10,7 +10,7 @@ pub struct MatchStartData {
     pub participants: HashSet<SimpleParticipant>
 }
 
-#[derive(Serialize, Deserialize,)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchEndData {
     pub winning_parties: Vec<String>,
