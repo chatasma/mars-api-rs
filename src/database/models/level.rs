@@ -85,10 +85,14 @@ pub enum LevelGamemode {
     AttackDefend,
     #[strum(props(fancy = "Arcade"))]
     Arcade,
+    #[strum(props(fancy = "Bed Wars"))]
+    BedWars,
     #[strum(props(fancy = "Blitz"))]
     Blitz,
     #[strum(props(fancy = "Blitz: Rage"))]
     BlitzRage,
+    #[strum(props(fancy = "Bridge"))]
+    Bridge,
     #[strum(props(fancy = "Capture the Flag"))]
     CaptureTheFlag,
     #[strum(props(fancy = "Control the Point"))]
@@ -103,18 +107,26 @@ pub enum LevelGamemode {
     FreeForAll,
     #[strum(props(fancy = "Flag Football"))]
     FlagFootball,
+    #[strum(props(fancy = "Infection"))]
+    Infection,
     #[strum(props(fancy = "King of the Hill"))]
     KingOfTheHill,
     #[strum(props(fancy = "King of the Flag"))]
     KingOfTheFlag,
     #[strum(props(fancy = "Mixed"))]
     Mixed,
+    #[strum(props(fancy = "Payload"))]
+    Payload,
     #[strum(props(fancy = "Rage"))]
     Rage,
     #[strum(props(fancy = "Race for Wool"))]
     RaceForWool,
     #[strum(props(fancy = "Scorebox"))]
     Scorebox,
+    #[strum(props(fancy = "Skywars"))]
+    Skywars,
+    #[strum(props(fancy = "Survival Games"))]
+    SurvivalGames,
     #[strum(props(fancy = "Deathmatch"))]
     Deathmatch
 }
