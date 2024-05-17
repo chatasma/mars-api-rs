@@ -23,7 +23,7 @@ impl std::fmt::Debug for AuthorizationError {
 }
 
 fn create_failure_outcome(status: Status, error: String) -> request::Outcome<AuthorizationToken, AuthorizationError> {
-    request::Outcome::Failure((status, AuthorizationError { problem: error }))
+    request::Outcome::Error((status, AuthorizationError { problem: error }))
 }
 
 #[rocket::async_trait]
