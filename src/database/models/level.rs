@@ -86,7 +86,7 @@ pub enum LevelGamemode {
     #[strum(props(fancy = "Arcade"))]
     Arcade,
     #[strum(props(fancy = "Bed Wars"))]
-    BedWars,
+    Bedwars,
     #[strum(props(fancy = "Blitz"))]
     Blitz,
     #[strum(props(fancy = "Blitz: Rage"))]
