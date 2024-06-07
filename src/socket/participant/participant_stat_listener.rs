@@ -92,8 +92,8 @@ impl PlayerListener for ParticipantStatListener {
         context: &mut Self::Context, 
         amount: u32
     ) {
-        let current_amount = context.stats.killstreaks.get(&amount).unwrap_or(&0).to_owned();
-        context.stats.killstreaks.insert(amount, current_amount + 1);
+        let current_amount = context.stats.killstreaks.get(&amount.to_string()).unwrap_or(&0).to_owned();
+        context.stats.killstreaks.insert(amount.to_string(), current_amount + 1);
     }
 
     async fn on_killstreak_end(
@@ -103,8 +103,8 @@ impl PlayerListener for ParticipantStatListener {
         context: &mut Self::Context, 
         amount: u32
     ) {
-        let current_amount = context.stats.killstreaks_ended.get(&amount).unwrap_or(&0).to_owned();
-        context.stats.killstreaks_ended.insert(amount, current_amount + 1);
+        let current_amount = context.stats.killstreaks_ended.get(&amount.to_string()).unwrap_or(&0).to_owned();
+        context.stats.killstreaks_ended.insert(amount.to_string(), current_amount + 1);
     }
 
     async fn on_party_join(

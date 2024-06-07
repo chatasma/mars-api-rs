@@ -109,8 +109,8 @@ pub struct PlayerStats {
     pub records: PlayerRecords,
     pub weapon_kills: HashMap<String, u32>,
     pub weapon_deaths: HashMap<String, u32>,
-    pub killstreaks: HashMap<u32, u32>,
-    pub killstreaks_ended: HashMap<u32, u32>,
+    pub killstreaks: HashMap<String, u32>,
+    pub killstreaks_ended: HashMap<String, u32>,
     pub achievements: HashMap<String, AchievementData>
 }
 
@@ -150,8 +150,9 @@ impl PlayerStats {
             ScoreType::WoolDefends => self.objectives.wool_defends,
             ScoreType::ControlPointCaptures => self.objectives.control_point_captures,
             ScoreType::HighestKillstreak => {
-                let key = self.killstreaks.keys().max().unwrap_or(&100);
-                let value = self.killstreaks.get(key).unwrap_or(&0).clone();
+                let key = self.killstreaks.keys().map(|ksstr| ksstr.parse::<u32>().unwrap_or(0))
+                    .max().unwrap_or(100u32);
+                let value = self.killstreaks.get(&key.to_string()).unwrap_or(&0).clone();
                 value
             },
         }

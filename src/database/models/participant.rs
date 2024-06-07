@@ -98,8 +98,8 @@ pub struct ParticipantStats {
     pub messages: PlayerMessages,
     pub weapon_kills: HashMap<String, u32>,
     pub weapon_deaths: HashMap<String, u32>,
-    pub killstreaks: HashMap<u32, u32>,
-    pub killstreaks_ended: HashMap<u32, u32>,
+    pub killstreaks: HashMap<String, u32>,
+    pub killstreaks_ended: HashMap<String, u32>,
     pub duels: HashMap<String, Duel>
 }
 

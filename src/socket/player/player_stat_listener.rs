@@ -89,8 +89,8 @@ impl PlayerListener for PlayerStatListener {
                 return;
             };
 
-            let current_killstreak_count = context.stats.killstreaks.get(&amount).unwrap_or(&0).to_owned();
-            context.stats.killstreaks.insert(amount, current_killstreak_count + 1);
+            let current_killstreak_count = context.stats.killstreaks.get(&amount.to_string()).unwrap_or(&0).to_owned();
+            context.stats.killstreaks.insert(amount.to_string(), current_killstreak_count + 1);
         };
     }
 
@@ -106,8 +106,8 @@ impl PlayerListener for PlayerStatListener {
                 return;
             };
 
-            let current_killstreak_count = context.stats.killstreaks_ended.get(&amount).unwrap_or(&0).to_owned();
-            context.stats.killstreaks_ended.insert(amount, current_killstreak_count + 1);
+            let current_killstreak_count = context.stats.killstreaks_ended.get(&amount.to_string()).unwrap_or(&0).to_owned();
+            context.stats.killstreaks_ended.insert(amount.to_string(), current_killstreak_count + 1);
         };
     }
 

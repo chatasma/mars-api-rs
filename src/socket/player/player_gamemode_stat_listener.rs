@@ -84,8 +84,8 @@ impl PlayerListener for PlayerGamemodeStatListener {
                 let mut default_gamemode_stats = GamemodeStats::default();
                 let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
 
-                let prev_amount = stats.killstreaks.get(&amount).unwrap_or(&0).to_owned();
-                stats.killstreaks.insert(amount, prev_amount + 1);
+                let prev_amount = stats.killstreaks.get(&amount.to_string()).unwrap_or(&0).to_owned();
+                stats.killstreaks.insert(amount.to_string(), prev_amount + 1);
             };
         };
     }
