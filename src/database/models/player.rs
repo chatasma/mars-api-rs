@@ -81,36 +81,67 @@ pub type GamemodeStats = PlayerStats;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerStats {
+    #[serde(default)]
     pub xp: u32,
+    #[serde(default)]
     pub server_playtime: u64,
+    #[serde(default)]
     pub game_playtime: u64,
+    #[serde(default)]
     pub kills: u32,
+    #[serde(default)]
     pub deaths: u32,
+    #[serde(default)]
     pub void_kills: u32,
+    #[serde(default)]
     pub void_deaths: u32,
+    #[serde(default)]
     pub first_bloods: u32,
+    #[serde(default)]
     pub first_bloods_suffered: u32,
+    #[serde(default)]
     pub objectives: PlayerObjectiveStatistics,
+    #[serde(default)]
     pub bow_shots_taken: u32,
+    #[serde(default)]
     pub bow_shots_hit: u32,
+    #[serde(default)]
     pub blocks_placed: HashMap<String, u32>,
+    #[serde(default)]
     pub blocks_broken: HashMap<String, u32>,
+    #[serde(default)]
     pub damage_taken: f64,
+    #[serde(default)]
     pub damage_given: f64,
+    #[serde(default)]
     pub damage_given_bow: f64,
+    #[serde(default)]
     pub messages: PlayerMessages,
+    #[serde(default)]
     pub wins: u32,
+    #[serde(default)]
     pub losses: u32,
+    #[serde(default)]
     pub ties: u32,
+    #[serde(default)]
     pub matches: u32,
+    #[serde(default)]
     pub matches_present_start: u32,
+    #[serde(default)]
     pub matches_present_full: u32,
+    #[serde(default)]
     pub matches_present_end: u32,
+    #[serde(default)]
     pub records: PlayerRecords,
+    #[serde(default)]
     pub weapon_kills: HashMap<String, u32>,
+    #[serde(default)]
     pub weapon_deaths: HashMap<String, u32>,
+    #[serde(default)]
     pub killstreaks: HashMap<String, u32>,
+    #[serde(default)]
     pub killstreaks_ended: HashMap<String, u32>,
+    #[serde(default)]
     pub achievements: HashMap<String, AchievementData>
 }
 
@@ -240,12 +271,19 @@ impl Default for PlayerObjectiveStatistics {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerRecords {
+    #[serde(default)]
     pub longest_session: Option<SessionRecord>,
+    #[serde(default)]
     pub longest_projectile_kill: Option<ProjectileRecord>,
+    #[serde(default)]
     pub fastest_wool_capture: Option<PlayerRecord<u64>>,
+    #[serde(default)]
     pub fastest_flag_capture: Option<PlayerRecord<u64>>,
+    #[serde(default)]
     pub fastest_first_blood: Option<FirstBloodRecord>,
+    #[serde(default)]
     pub kills_in_match: Option<PlayerRecord<u32>>,
+    #[serde(default)]
     pub deaths_in_match: Option<PlayerRecord<u32>>
 }
 
@@ -309,8 +347,11 @@ impl SimplePlayer {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerMessages {
+    #[serde(default)]
     pub staff: u32,
+    #[serde(default)]
     pub global: u32,
+    #[serde(default)]
     pub team: u32,
 }
 

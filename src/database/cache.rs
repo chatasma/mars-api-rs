@@ -35,12 +35,22 @@ impl<R> Cache<R> where R: CollectionOwner<R> + DeserializeOwned + Unpin + Sync +
         if let Some(datum) = self.query(key).await { Some(datum) } 
         else {
             let collection = R::get_collection(database);
-            collection.find_one(doc! {
+            let query = doc! {
                 "$or": [
                     { "_id": key },
                     { "nameLower": key.to_lowercase() }
                 ]
-            }, None).await.unwrap_or(None)
+            };
+            let result = collection.find_one(query.clone(), None).await;
+            match result {
+                Ok(opt) => { opt
+                }
+                Err(e) => {
+                    warn!("Encountered error performing query {}", query);
+                    warn!("Error: {}", e);
+                    None
+                }
+            }
         }
     }
 
