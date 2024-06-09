@@ -22,7 +22,11 @@ pub static XP_KILLSTREAK_COEFFICIENT : u32 = 10;
 
 impl PlayerXPListener {
     pub fn gain(xp: u32, level: u32) -> u32 {
-        let start_multiplier = u32::max(XP_BEGINNER_ASSIST_MAX - level, 1);
+        let start_multiplier = if level > XP_BEGINNER_ASSIST_MAX {
+            1
+        } else {
+            u32::max(XP_BEGINNER_ASSIST_MAX - level, 1)
+        };
         xp * start_multiplier
     }
 }
