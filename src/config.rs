@@ -98,6 +98,7 @@ async fn deserialize_mars_options() -> Result<MarsConfigOptions, ConfigDeseriali
             "webhooks.reports" => { config.reports_webhook_url = v.to_string(); },
             "webhooks.notes" => { config.notes_webhook_url = v.to_string(); },
             "webhooks.debug" => { config.debug_log_webhook_url = v.to_string(); },
+            "enable-exponential-exp" => { if let Ok(b) = v.to_string().parse::<bool>() { config.use_exponential_exp = b; } }
             _ => {}
         }
     });
@@ -173,7 +174,8 @@ pub struct MarsConfigOptions {
     pub punishments_webhook_url: String,
     pub reports_webhook_url: String,
     pub notes_webhook_url: String,
-    pub debug_log_webhook_url: String
+    pub debug_log_webhook_url: String,
+    pub use_exponential_exp: bool
 }
 
 impl Default for MarsConfigOptions {
@@ -188,6 +190,7 @@ impl Default for MarsConfigOptions {
             reports_webhook_url: String::new(),
             notes_webhook_url: String::new(),
             debug_log_webhook_url: String::new(),
+            use_exponential_exp: false
         }
     }
 }

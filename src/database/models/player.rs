@@ -6,7 +6,7 @@ use mongodb::Collection;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
-use crate::{database::CollectionOwner, socket::{leaderboard::ScoreType, player::{player_xp_listener::{PlayerXPListener, XP_PER_LEVEL}, player_events::PlayerXPGainData}, server::server_context::{ServerContext}, event_type::EventType}};
+use crate::{database::CollectionOwner, socket::{leaderboard::ScoreType, player::{player_xp_listener::PlayerXPListener, player_events::PlayerXPGainData}, server::server_context::ServerContext, event_type::EventType}};
 
 use super::{punishment::StaffNote, level::LevelGamemode, r#match::Match};
 
@@ -61,7 +61,8 @@ impl Player {
 
     // TODO: Multipliers
     pub async fn add_xp(&mut self, server_context: &mut ServerContext, raw_xp: u32, reason: &String, notify: bool, raw_only: bool) {
-        let original_level = self.stats.get_level();
+        let use_exponential = server_context.api_state.config.options.use_exponential_exp;
+        let original_level = self.stats.get_level(use_exponential);
         let target_xp_increment = if raw_only { raw_xp } else { u32::max(PlayerXPListener::gain(raw_xp, original_level), raw_xp) };
         self.stats.xp += target_xp_increment;
 
@@ -146,8 +147,12 @@ pub struct PlayerStats {
 }
 
 impl PlayerStats {
-    pub fn get_level(&self) -> u32 {
-        (self.xp + XP_PER_LEVEL) / XP_PER_LEVEL
+    pub fn get_level(&self, use_exponential: bool) -> u32 {
+        if use_exponential {
+            ((0.0056f32 * (self.xp as f32).powf(0.715f32)) as u32) + 1
+        } else {
+            (self.xp + 5000) / 5000
+        }
     }
 
     pub fn get_score(&self, score_type: &ScoreType) -> u32 {

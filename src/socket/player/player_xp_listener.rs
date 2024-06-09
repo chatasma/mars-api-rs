@@ -4,7 +4,6 @@ use super::{player_listener::PlayerListener, player_events::PlayerDeathData};
 
 pub struct PlayerXPListener {}
 
-pub static XP_PER_LEVEL : u32 = 5000;
 pub static XP_BEGINNER_ASSIST_MAX : u32 = 10;
 
 pub static XP_WIN : u32 = 200;
