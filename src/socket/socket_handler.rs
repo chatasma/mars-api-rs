@@ -6,7 +6,6 @@ use std::sync::Arc;
 use futures::StreamExt;
 use log::info;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
 
@@ -50,7 +49,6 @@ pub async fn setup_socket(
     // Create the event loop and TCP listener we'll accept connections on.
     let socket = TcpListener::bind(&addr).await?;
 
-    let mut sigterm = signal(SignalKind::terminate()).unwrap();
     loop {
         tokio::select! {
             socket_accept_result = socket.accept() => {
@@ -65,12 +63,10 @@ pub async fn setup_socket(
                     tokio::spawn(accept_connection(ws_stream, session_state));
                 }
             },
-            _ = tokio::signal::ctrl_c() => {
+            _ = exit_signal() => {
+                info!("Gracefully dropping websocket");
                 break;
             },
-            _ = sigterm.recv() => {
-                break;
-            }
         };
     }
     Ok(())
@@ -154,4 +150,20 @@ fn verify_connection(socket_state: &SocketState, socket_session: &mut SocketSess
 fn build_response_from_error_responder(responder: ApiErrorResponder) -> HttpResponse<Option<String>> {
     let data = rocket::serde::json::serde_json::to_string(&responder.error).unwrap_or_else(|_| "{}".to_owned());
     HttpResponse::builder().status(responder.status.code).body(Some(data)).unwrap()
+}
+
+#[cfg(target_family = "unix")]
+async fn exit_signal() {
+    // https://docs.rs/tokio/latest/src/tokio/signal/unix.rs.html#6
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
+    tokio::select! {
+       _ = tokio::signal::ctrl_c() => {}
+       _ = sigterm.recv() => {}
+    }
+}
+
+#[cfg(not(target_family = "unix"))]
+async fn exit_signal() {
+    tokio::signal::ctrl_c().await.ok();
 }

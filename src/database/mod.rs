@@ -10,6 +10,7 @@ use serde::Serialize;
 use anyhow::anyhow;
 
 use crate::{database::models::player::Player, util::r#macro::unwrap_helper};
+use crate::util::validation::verbose_result_ok;
 
 use self::models::{achievement::Achievement, death::Death, level::Level, r#match::Match, punishment::Punishment, rank::Rank, session::Session};
 
@@ -45,13 +46,24 @@ impl Database {
 
     pub async fn consume_cursor_into_owning_vec<T: DeserializeOwned + Unpin + Send + Sync>(cursor: Cursor<T>) 
         -> Vec<T> {
-        cursor.collect::<Vec<_>>().await.into_iter().filter_map(Result::ok).collect()
+        cursor.collect::<Vec<_>>().await.into_iter().filter_map(
+            |result| verbose_result_ok(
+                String::from("Deserialization error"), result
+            )
+        ).collect()
     }
 
     pub async fn get_all_documents<T>(&self) -> Vec<T> 
         where T: DeserializeOwned + Serialize + IdentifiableDocument + CollectionOwner<T> + Unpin + Send + Sync {
         // Self::consume_cursor_into_owning_vec_option(T::get_collection(&self).find(doc! {}, None).await.ok()).await
-        Self::consume_cursor_into_owning_vec_option(T::get_collection(&self).find(None, None).await.ok()).await
+        let cursor = match T::get_collection(&self).find(None, None).await {
+            Ok(cursor) => cursor,
+            Err(e) => {
+                warn!("Error retrieving documents from '{}': {}", T::get_collection_name(), e);
+                return Vec::new();
+            }
+        };
+        Self::consume_cursor_into_owning_vec_option(Some(cursor)).await
     }
 
     pub async fn find_by_id_or_name<T>(&self, text: &str) -> Option<T>
