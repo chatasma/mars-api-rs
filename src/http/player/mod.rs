@@ -29,7 +29,6 @@ pub async fn prelogin(
     let ip = hash_ip(&state, &data.ip);
     let player_optional = Database::find_by_id(&state.database.players, &data.player.id).await;
     if let Some(mut returning_player) = player_optional {
-        println!("the player was found!");
         returning_player.name = data.player.name.clone();
         returning_player.name_lower = returning_player.name.to_lowercase();
         if !returning_player.ips.contains(&ip) {
@@ -38,33 +37,40 @@ pub async fn prelogin(
 
         let mut puns : Vec<Punishment> = state.database.get_active_player_punishments(&returning_player).await;
         let ban_pun_optional = puns.iter().find(|pun| pun.action.is_ban());
-        let mut ip_punishments : Vec<Punishment> = match state.database.punishments.find(doc! {
-            "targetIps": &ip,
-            "action.kind": PunishmentKind::IpBan.to_string()
-        }, None).await {
-            Ok(cursor) => Database::consume_cursor_into_owning_vec(cursor).await,
-            Err(_) => return Err(ApiErrorResponder::validation_error_with_message("Could not load punishments for player"))
+        let banned = {
+            let is_player_banned = ban_pun_optional.is_some();
+            if is_player_banned {
+                true
+            } else {
+                let mut ip_punishments : Vec<Punishment> = match state.database.punishments.find(doc! {
+                    "targetIps": &ip,
+                    "action.kind": PunishmentKind::IpBan.to_string()
+                }, None).await {
+                    Ok(cursor) => Database::consume_cursor_into_owning_vec(cursor).await,
+                    Err(_) => return Err(ApiErrorResponder::validation_error_with_message("Could not load punishments for player"))
+                };
+                ip_punishments.retain(|p| p.is_active());
+                let is_ip_banned = !ip_punishments.is_empty();
+                if is_ip_banned {
+                    // move ip puns into main punishment vector
+                    puns.append(&mut ip_punishments);
+                }
+                is_ip_banned
+            }
         };
-        let ip_ban = ip_punishments.first();
-
-        let banned = ban_pun_optional.is_some() || ip_ban.is_some();
-
-        // move ip puns into main punishment vector
-        puns.append(&mut ip_punishments);
-
         state.player_cache.set(&state.database, &returning_player.name, &returning_player, true).await;
         state.database.ensure_player_name_uniqueness(&data.player.name, &data.player.id).await;
 
         Ok(PlayerPreLoginResponder { 
             response: PlayerPreLoginResponse {
                 new: false, 
-                allowed: !banned, 
+                allowed: !banned,
                 player: returning_player, 
                 active_punishments: puns 
             }
         })
     } else {
-        println!("Could not find player in database!");
+        println!("Could not find player {} in database!", player_id);
         let time_millis : f64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as f64;
         let player = Player {
             id: data.player.id.clone(),
