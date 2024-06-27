@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use rocket::{Rocket, Build, State, serde::json::Json};
 
-use crate::{MarsAPIState, socket::leaderboard::{ScoreType, LeaderboardEntry, LeaderboardPeriod}, util::{r#macro::unwrap_helper, error::ApiErrorResponder}};
+use crate::{MarsAPIState, socket::leaderboard::{ScoreType, LeaderboardLine, LeaderboardPeriod}, util::{r#macro::unwrap_helper, error::ApiErrorResponder}};
 
 const PUBLIC_SCORE_TYPES : &[ScoreType] = &[
     ScoreType::Kills,
@@ -35,14 +35,14 @@ async fn get_leaderboard_entries(
     score_type: &str, 
     period: &str, 
     limit: Option<u32>
-) -> Result<Json<Vec<LeaderboardEntry>>, ApiErrorResponder> {
+) -> Result<Json<Vec<LeaderboardLine>>, ApiErrorResponder> {
     let score_type = unwrap_helper::return_default!(ScoreType::from_str(score_type).ok(), Err(ApiErrorResponder::validation_error()));
     if !PUBLIC_SCORE_TYPES.contains(&score_type) {
         return Err(ApiErrorResponder::unauthorized());
     };
     let period = unwrap_helper::return_default!(LeaderboardPeriod::from_str(period).ok(), Err(ApiErrorResponder::validation_error()));
     let limit = limit.unwrap_or(10);
-    let leaderboard = score_type.to_leaderboard(&state.leaderboards).fetch_top(&period, if limit > 50 { 50 } else { limit }).await;
+    let leaderboard = score_type.to_leaderboard(&state.leaderboards).fetch_top(&period, if limit > 50 { 50 } else { limit }).await.unwrap_or_else(|_| Vec::new());
     Ok(Json(leaderboard))
 }
 

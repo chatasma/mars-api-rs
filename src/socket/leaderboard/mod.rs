@@ -1,23 +1,33 @@
+use std::ops::Sub;
 use std::sync::Arc;
+
+use chrono::{Datelike, DateTime, Days, FixedOffset, Month, Months, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use mongodb::{bson::doc, Cursor};
 use num_traits::cast::FromPrimitive;
 use redis::{aio::Connection, ToRedisArgs};
-use serde::{Serialize, Deserialize};
-use strum_macros::{Display, EnumIter, EnumString};
+use rocket::time::macros::date;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-
-use chrono::{Month, DateTime, Utc, TimeZone, FixedOffset, Datelike};
+use strum_macros::{Display, EnumIter, EnumString};
 
 use crate::{database::{cache::RedisAdapter, Database, models::player::Player}, util::r#macro::unwrap_helper};
+use crate::socket::leaderboard::leaderboard_new::LeaderboardV2;
 
 pub mod leaderboard_listener;
+pub mod leaderboard_new;
 
-fn get_est_datetime() -> DateTime<FixedOffset> {
+// UTC-4 (EDT, EST during daylight savings)
+fn get_offset() -> FixedOffset {
+    FixedOffset::west_opt(4 * 3600).expect("FixedOffset::west out of bounds")
+}
+
+pub fn get_lb_datetime() -> DateTime<FixedOffset> {
     let naive_utc_time = Utc::now().naive_utc();
-    let fixed_offset = FixedOffset::west(4 * 3600); // UTC-4 for EST
+    let fixed_offset = get_offset();
     fixed_offset.from_utc_datetime(&naive_utc_time)
 }
 
+#[derive(Eq, PartialEq, Clone)]
 pub enum Season {
     Spring,
     Summer,
@@ -35,6 +45,54 @@ impl Season {
         }
     }
 
+    pub fn get_northern_season_start(&self) -> (Month, u32) {
+        match &self {
+            Season::Spring => {
+                (Month::March, 20)
+            }
+            Season::Summer => {
+                (Month::June, 20)
+            }
+            Season::Autumn => {
+                (Month::September, 22)
+            }
+            Season::Winter => {
+                (Month::December, 21)
+            }
+        }
+    }
+
+    pub fn get_season(date: NaiveDate) -> Self {
+        let szn_as_date = |szn: &Season| {
+            let szn_start = szn.get_northern_season_start();
+            NaiveDate::from_ymd_opt(
+                date.year(),
+                szn_start.0.number_from_month(),
+                szn_start.1
+            ).expect("Season start date to be valid")
+        };
+        if date < szn_as_date(&Season::Spring) {
+            Season::Winter
+        } else if date < szn_as_date(&Season::Summer) {
+            Season::Spring
+        } else if date < szn_as_date(&Season::Autumn) {
+            Season::Summer
+        } else if date < szn_as_date(&Season::Winter) {
+            Season::Autumn
+        } else {
+            Season::Winter
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match &self {
+            Season::Spring => Season::Summer,
+            Season::Summer => Season::Autumn,
+            Season::Autumn => Season::Winter,
+            Season::Winter => Season::Spring
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Season::Spring => "spring",
@@ -45,7 +103,7 @@ impl Season {
     }
 }
 
-#[derive(EnumIter, EnumString)]
+#[derive(EnumIter, EnumString, Hash, Eq, Clone, PartialEq, strum_macros::Display)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum LeaderboardPeriod {
     Daily,
@@ -56,9 +114,164 @@ pub enum LeaderboardPeriod {
     AllTime
 }
 
+type LeaderboardPeriodDateTimeRange = (Option<DateTime<FixedOffset>>, DateTime<FixedOffset>);
+
 impl LeaderboardPeriod {
+    pub fn get_most_granular_period() -> LeaderboardPeriod {
+        LeaderboardPeriod::Daily
+    }
+
+    pub fn are_datetimes_disjoint(
+        &self,
+        date1: DateTime<FixedOffset>, date2: DateTime<FixedOffset>
+    ) -> bool {
+        match &self {
+            LeaderboardPeriod::Daily => {
+                date1.date_naive() != date2.date_naive()
+            }
+            LeaderboardPeriod::Weekly => {
+                (date1 - Days::new(date1.weekday().num_days_from_sunday() as u64)).date_naive() !=
+                    (date2 - Days::new(date2.weekday().num_days_from_sunday() as u64)).date_naive()
+            }
+            LeaderboardPeriod::Monthly => {
+                date1.year() != date2.year() || date1.month() != date2.month()
+            }
+            LeaderboardPeriod::Seasonally => {
+                Season::of_northern(
+                    Month::from_u32(date1.month()).expect("Date to be in a valid month")
+                ) != Season::of_northern(
+                    Month::from_u32(date2.month()).expect("Date to be in a valid month")
+                )
+            }
+            LeaderboardPeriod::Yearly => {
+                date1.year() != date2.year()
+            }
+            LeaderboardPeriod::AllTime => {
+                false
+            }
+        }
+    }
+
+    pub fn get_full_date_range(&self, date_time: DateTime<FixedOffset>) -> LeaderboardPeriodDateTimeRange {
+        match &self {
+            LeaderboardPeriod::Daily => {
+                let midnight = date_time.with_time(NaiveTime::MIN)
+                    .single().expect("Should resolve to the single variant");
+                let tmrw_midnight = midnight + Days::new(1);
+                (Some(midnight), tmrw_midnight)
+            }
+            LeaderboardPeriod::Weekly => {
+                let week_start = (date_time - Days::new(date_time.weekday().num_days_from_sunday() as u64))
+                    .with_time(NaiveTime::MIN)
+                    .single().expect("Should resolve to the single variant");
+                let week_end = week_start + Days::new(7);
+                (Some(week_start), week_end)
+            }
+            LeaderboardPeriod::Monthly => {
+                let month_start = date_time.with_day0(0).expect("The first day of the month to exist");
+                let month_end = date_time + Months::new(1);
+                (Some(month_start), month_end)
+            }
+            LeaderboardPeriod::Seasonally => {
+                let current_season = Season::get_season(date_time.date_naive());
+                let szn_to_nd = |szn: &Season| {
+                    let (month, day) = szn.get_northern_season_start();
+                    let season_year = if month.number_from_month() > date_time.month() ||
+                        (month.number_from_month() == date_time.month() && day > date_time.day()) {
+                        date_time.year() - 1
+                    } else {
+                        date_time.year()
+                    };
+                    NaiveDate::from_ymd_opt(season_year, month.number_from_month(), day).expect("Season start to be a valid date")
+                };
+                let season_start = szn_to_nd(&current_season);
+                let season_end = szn_to_nd(&current_season.next());
+                let season_start_datetime =
+                    date_time.timezone().from_local_datetime(
+                        &season_start.and_time(NaiveTime::MIN)
+                    ).single().expect("Resolved season start");
+                let season_end_datetime =
+                    date_time.timezone().from_local_datetime(
+                        &season_end.and_time(NaiveTime::MIN)
+                    ).single().expect("Resolved season end");
+                (Some(season_start_datetime), season_end_datetime)
+            }
+            LeaderboardPeriod::Yearly => {
+                let begin = date_time.with_month0(0).unwrap().with_day0(0).unwrap()
+                    .with_time(NaiveTime::MIN)
+                    .single().expect("Should resolve to the single variant");
+                let end = begin.with_year(begin.year() + 1).expect("The next year to exist");
+                (Some(begin), end)
+            }
+            LeaderboardPeriod::AllTime => {
+                (None, date_time)
+            }
+        }
+    }
+
+    pub fn get_date_range_with_now_as_upperbound(&self) -> LeaderboardPeriodDateTimeRange {
+        let today_datetime = get_lb_datetime();
+        let past_date = match &self {
+            LeaderboardPeriod::Daily => {
+                Some(
+                    today_datetime.with_time(NaiveTime::MIN)
+                        .single()
+                        .expect("Should resolve to the single variant")
+                )
+            }
+            LeaderboardPeriod::Weekly => {
+                let days_in_the_past = today_datetime.weekday().num_days_from_sunday();
+                Some(
+                    today_datetime.sub(TimeDelta::days(days_in_the_past as i64)).with_time(NaiveTime::MIN)
+                        .single()
+                        .expect("Should resolve to the single variant")
+                )
+            }
+            LeaderboardPeriod::Monthly => {
+                Some(
+                    today_datetime.with_day0(0u32).unwrap()
+                        .with_time(NaiveTime::MIN)
+                        .single()
+                        .expect("Should resolve to the single variant")
+                )
+            }
+            LeaderboardPeriod::Seasonally => {
+                let current_month = Month::from_u32(today_datetime.month())
+                    .expect("Month to resolve");
+                let (season_month, season_day) = Season::of_northern(current_month)
+                    .get_northern_season_start();
+                // if season begin date is in the future, then the season was from the last year
+                let season_year = if season_month.number_from_month() > today_datetime.month() || (season_month.number_from_month() == today_datetime.month() && season_day > today_datetime.day()) {
+                    today_datetime.year() - 1
+                } else {
+                    today_datetime.year()
+                };
+                let season_date =
+                    NaiveDate::from_ymd_opt(season_year, season_month.number_from_month(), season_day)
+                        .expect("This should be a valid date");
+                let delta = today_datetime.date_naive().signed_duration_since(season_date);
+                Some(
+                    today_datetime.sub(delta).with_time(NaiveTime::MIN)
+                        .single()
+                        .expect("Should resolve to the single variant")
+                )
+            }
+            LeaderboardPeriod::Yearly => {
+                Some(
+                    today_datetime.with_month0(0).unwrap().with_day0(0).unwrap()
+                        .with_time(NaiveTime::MIN)
+                        .single().expect("Should resolve to the single variant")
+                )
+            }
+            LeaderboardPeriod::AllTime => {
+                None
+            }
+        };
+        (past_date, today_datetime)
+    }
+
     pub fn get_today_id(&self) -> String {
-        let date = get_est_datetime();
+        let date = get_lb_datetime();
         match &self {
             Self::Daily => {
                 let day = date.day();
@@ -91,7 +304,7 @@ impl LeaderboardPeriod {
     }
 }
 
-#[derive(Display, EnumString, Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+#[derive(EnumString, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, strum_macros::Display)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ScoreType {
@@ -123,8 +336,38 @@ pub enum ScoreType {
     HighestKillstreak
 }
 
+enum ScoreTypeAggregation {
+    Sum, Max
+}
+
+impl ScoreTypeAggregation {
+    // true means the delta is useless
+    // false indicates whether it is unknown if the delta is useless
+    fn is_delta_useless(&self, delta: u32) -> bool {
+        if delta == 0 {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn requires_sequential_consistency(&self) -> bool {
+        match &self {
+            ScoreTypeAggregation::Sum => false,
+            ScoreTypeAggregation::Max => false
+        }
+    }
+
+    fn compare(&self, old: u32, new: u32) -> u32 {
+        match &self {
+            ScoreTypeAggregation::Sum => { old + new }
+            ScoreTypeAggregation::Max => { u32::max(old, new) }
+        }
+    }
+}
+
 impl ScoreType {
-    pub fn to_leaderboard<'a>(&self, lbs: &'a MarsLeaderboards) -> &'a Leaderboard {
+    pub fn to_leaderboard<'a>(&self, lbs: &'a MarsLeaderboards) -> &'a LeaderboardV2 {
         match self {
             ScoreType::Kills => &lbs.kills,
             ScoreType::Deaths => &lbs.deaths,
@@ -152,6 +395,24 @@ impl ScoreType {
             ScoreType::WoolDefends => &lbs.wool_defends,
             ScoreType::ControlPointCaptures => &lbs.control_point_captures,
             ScoreType::HighestKillstreak => &lbs.highest_killstreak,
+        }
+    }
+
+    pub fn get_aggregation_type(&self) -> ScoreTypeAggregation {
+        match &self {
+            ScoreType::Kills | ScoreType::Deaths | ScoreType::FirstBloods | ScoreType::Wins |
+            ScoreType::Losses | ScoreType::Ties | ScoreType::Xp | ScoreType::MessagesSent |
+            ScoreType::MatchesPlayed | ScoreType::ServerPlaytime | ScoreType::GamePlaytime |
+            ScoreType::CoreLeaks | ScoreType::CoreBlockDestroys | ScoreType::DestroyableDestroys |
+            ScoreType::DestroyableBlockDestroys | ScoreType::FlagCaptures | ScoreType::FlagDrops |
+            ScoreType::FlagPickups | ScoreType::FlagDefends | ScoreType::FlagHoldTime |
+            ScoreType::WoolCaptures | ScoreType::WoolDrops | ScoreType::WoolPickups |
+            ScoreType::WoolDefends | ScoreType::ControlPointCaptures => {
+                ScoreTypeAggregation::Sum
+            }
+            ScoreType::HighestKillstreak => {
+                ScoreTypeAggregation::Max
+            }
         }
     }
 }
@@ -213,8 +474,8 @@ impl Leaderboard {
         }).await;
     }
 
-    fn strings_as_leaderboard_entries(raw: Vec<String>) -> Vec<LeaderboardEntry> {
-        let mut entries : Vec<LeaderboardEntry> = Vec::new();
+    fn strings_as_leaderboard_entries(raw: Vec<String>) -> Vec<LeaderboardLine> {
+        let mut entries : Vec<LeaderboardLine> = Vec::new();
         if raw.len() <= 1 || raw.len() % 2 == 1 {
             return entries;
         };
@@ -227,12 +488,12 @@ impl Leaderboard {
                 let name = unwrap_helper::continue_default!(parts.next());
                 (id, name)
             };
-            entries.push(LeaderboardEntry { id: id.to_owned(), name: name.to_owned(), score });
+            entries.push(LeaderboardLine { id: id.to_owned(), name: name.to_owned(), score });
         }
         entries
     }
 
-    pub async fn fetch_top(&self, period: &LeaderboardPeriod, limit: u32) -> Vec<LeaderboardEntry> {
+    pub async fn fetch_top(&self, period: &LeaderboardPeriod, limit: u32) -> Vec<LeaderboardLine> {
         let lb_top = self.cache.submit(|mut conn| async move {
             let top : Option<Vec<String>> = match redis::cmd("ZRANGE").arg(&self.get_id(period)).arg(0u32).arg(limit - 1).arg("REV").arg("WITHSCORES").query_async::<Connection, Vec<String>>(&mut conn).await {
                 Ok(res) => Some(res),
@@ -273,67 +534,67 @@ impl Leaderboard {
 }
 
 pub struct MarsLeaderboards {
-    pub kills: Leaderboard,
-    pub deaths: Leaderboard,
-    pub first_bloods: Leaderboard,
-    pub wins: Leaderboard,
-    pub losses: Leaderboard,
-    pub ties: Leaderboard,
-    pub xp: Leaderboard,
-    pub messages_sent: Leaderboard,
-    pub matches_played: Leaderboard,
-    pub server_playtime: Leaderboard,
-    pub game_playtime: Leaderboard,
-    pub core_leaks: Leaderboard,
-    pub core_block_destroys: Leaderboard,
-    pub destroyable_destroys: Leaderboard,
-    pub destroyable_block_destroys: Leaderboard,
-    pub flag_captures: Leaderboard,
-    pub flag_drops: Leaderboard,
-    pub flag_pickups: Leaderboard,
-    pub flag_defends: Leaderboard,
-    pub flag_hold_time: Leaderboard,
-    pub wool_captures: Leaderboard,
-    pub wool_drops: Leaderboard,
-    pub wool_pickups: Leaderboard,
-    pub wool_defends: Leaderboard,
-    pub control_point_captures: Leaderboard,
-    pub highest_killstreak: Leaderboard
+    pub kills: LeaderboardV2,
+    pub deaths: LeaderboardV2,
+    pub first_bloods: LeaderboardV2,
+    pub wins: LeaderboardV2,
+    pub losses: LeaderboardV2,
+    pub ties: LeaderboardV2,
+    pub xp: LeaderboardV2,
+    pub messages_sent: LeaderboardV2,
+    pub matches_played: LeaderboardV2,
+    pub server_playtime: LeaderboardV2,
+    pub game_playtime: LeaderboardV2,
+    pub core_leaks: LeaderboardV2,
+    pub core_block_destroys: LeaderboardV2,
+    pub destroyable_destroys: LeaderboardV2,
+    pub destroyable_block_destroys: LeaderboardV2,
+    pub flag_captures: LeaderboardV2,
+    pub flag_drops: LeaderboardV2,
+    pub flag_pickups: LeaderboardV2,
+    pub flag_defends: LeaderboardV2,
+    pub flag_hold_time: LeaderboardV2,
+    pub wool_captures: LeaderboardV2,
+    pub wool_drops: LeaderboardV2,
+    pub wool_pickups: LeaderboardV2,
+    pub wool_defends: LeaderboardV2,
+    pub control_point_captures: LeaderboardV2,
+    pub highest_killstreak: LeaderboardV2
 }
 
 impl MarsLeaderboards {
     pub fn new(redis: Arc<RedisAdapter>, database: Arc<Database>) -> Self {
         MarsLeaderboards {
-            kills: Leaderboard { score_type: ScoreType::Kills, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            deaths: Leaderboard { score_type: ScoreType::Deaths, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            first_bloods: Leaderboard { score_type: ScoreType::FirstBloods, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            wins: Leaderboard { score_type: ScoreType::Wins, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            losses: Leaderboard { score_type: ScoreType::Losses, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            ties: Leaderboard { score_type: ScoreType::Ties, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            xp: Leaderboard { score_type: ScoreType::Xp, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            messages_sent: Leaderboard { score_type: ScoreType::MessagesSent, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            matches_played: Leaderboard { score_type: ScoreType::MatchesPlayed, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            server_playtime: Leaderboard { score_type: ScoreType::ServerPlaytime, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            game_playtime: Leaderboard { score_type: ScoreType::GamePlaytime, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            core_leaks: Leaderboard { score_type: ScoreType::CoreLeaks, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            core_block_destroys: Leaderboard { score_type: ScoreType::CoreBlockDestroys, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            destroyable_destroys: Leaderboard { score_type: ScoreType::DestroyableDestroys, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            destroyable_block_destroys: Leaderboard { score_type: ScoreType::DestroyableBlockDestroys, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            flag_captures: Leaderboard { score_type: ScoreType::FlagCaptures, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            flag_drops: Leaderboard { score_type: ScoreType::FlagDrops, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            flag_pickups: Leaderboard { score_type: ScoreType::FlagPickups, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            flag_defends: Leaderboard { score_type: ScoreType::FlagDefends, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            flag_hold_time: Leaderboard { score_type: ScoreType::FlagHoldTime, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            wool_captures: Leaderboard { score_type: ScoreType::WoolCaptures, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            wool_drops: Leaderboard { score_type: ScoreType::WoolDrops, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            wool_pickups: Leaderboard { score_type: ScoreType::WoolPickups, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            wool_defends: Leaderboard { score_type: ScoreType::WoolDefends, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            control_point_captures: Leaderboard { score_type: ScoreType::ControlPointCaptures, cache: Arc::clone(&redis), database: Arc::clone(&database) },
-            highest_killstreak: Leaderboard { score_type: ScoreType::HighestKillstreak, cache: Arc::clone(&redis), database: Arc::clone(&database) }
+            kills: LeaderboardV2::new(ScoreType::Kills, redis.clone(), database.clone()),
+            deaths: LeaderboardV2::new(ScoreType::Deaths, redis.clone(), database.clone()),
+            first_bloods: LeaderboardV2::new(ScoreType::FirstBloods, redis.clone(), database.clone()),
+            wins: LeaderboardV2::new(ScoreType::Wins, redis.clone(), database.clone()),
+            losses: LeaderboardV2::new(ScoreType::Losses, redis.clone(), database.clone()),
+            ties: LeaderboardV2::new(ScoreType::Ties, redis.clone(), database.clone()),
+            xp: LeaderboardV2::new(ScoreType::Xp, redis.clone(), database.clone()),
+            messages_sent: LeaderboardV2::new(ScoreType::MessagesSent, redis.clone(), database.clone()),
+            matches_played: LeaderboardV2::new(ScoreType::MatchesPlayed, redis.clone(), database.clone()),
+            server_playtime: LeaderboardV2::new(ScoreType::ServerPlaytime, redis.clone(), database.clone()),
+            game_playtime: LeaderboardV2::new(ScoreType::GamePlaytime, redis.clone(), database.clone()),
+            core_leaks: LeaderboardV2::new(ScoreType::CoreLeaks, redis.clone(), database.clone()),
+            core_block_destroys: LeaderboardV2::new(ScoreType::CoreBlockDestroys, redis.clone(), database.clone()),
+            destroyable_destroys: LeaderboardV2::new(ScoreType::DestroyableDestroys, redis.clone(), database.clone()),
+            destroyable_block_destroys: LeaderboardV2::new(ScoreType::DestroyableBlockDestroys, redis.clone(), database.clone()),
+            flag_captures: LeaderboardV2::new(ScoreType::FlagCaptures, redis.clone(), database.clone()),
+            flag_drops: LeaderboardV2::new(ScoreType::FlagDrops, redis.clone(), database.clone()),
+            flag_pickups: LeaderboardV2::new(ScoreType::FlagPickups, redis.clone(), database.clone()),
+            flag_defends: LeaderboardV2::new(ScoreType::FlagDefends, redis.clone(), database.clone()),
+            flag_hold_time: LeaderboardV2::new(ScoreType::FlagHoldTime, redis.clone(), database.clone()),
+            wool_captures: LeaderboardV2::new(ScoreType::WoolCaptures, redis.clone(), database.clone()),
+            wool_drops: LeaderboardV2::new(ScoreType::WoolDrops, redis.clone(), database.clone()),
+            wool_pickups: LeaderboardV2::new(ScoreType::WoolPickups, redis.clone(), database.clone()),
+            wool_defends: LeaderboardV2::new(ScoreType::WoolDefends, redis.clone(), database.clone()),
+            control_point_captures: LeaderboardV2::new(ScoreType::ControlPointCaptures, redis.clone(), database.clone()),
+            highest_killstreak: LeaderboardV2::new(ScoreType::HighestKillstreak, redis.clone(), database.clone())
         }
     }
 
-    pub fn from_score_type(&self, score_type: ScoreType) -> &Leaderboard {
+    pub fn from_score_type(&self, score_type: ScoreType) -> &LeaderboardV2 {
         match score_type {
             ScoreType::Kills => &self.kills,
             ScoreType::Deaths => &self.deaths,
@@ -367,7 +628,7 @@ impl MarsLeaderboards {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LeaderboardEntry {
+pub struct LeaderboardLine {
     pub id: String,
     pub name: String,
     pub score: u32

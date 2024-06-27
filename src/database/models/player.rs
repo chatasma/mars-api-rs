@@ -67,7 +67,7 @@ impl Player {
 
         server_context.call(&EventType::PlayerXpGain, PlayerXPGainData { player_id: self.id.clone(), gain: target_xp_increment, reason: reason.clone(), notify }).await;
 
-        server_context.api_state.leaderboards.xp.increment(&self.id_name(), Some(target_xp_increment)).await;
+        server_context.api_state.leaderboards.xp.process_update(self.id_name(), target_xp_increment).await;
     }
 }
 

@@ -1,15 +1,19 @@
 use std::{str::FromStr, time::Duration};
+use std::fmt::Display;
 
 use mars_api_rs_macro::IdentifiableDocument;
 use mongodb::{options::{ClientOptions, FindOneOptions, UpdateOptions}, Client, Collection, bson::{doc, oid::ObjectId}, Cursor, results::DeleteResult};
 use models::tag::Tag;
 use rand::Rng;
 use rocket::serde::DeserializeOwned;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use serde::Serialize;
 use anyhow::anyhow;
+use mongodb::bson::Document;
+use mongodb::options::{CollectionOptions, CreateCollectionOptions, TimeseriesOptions};
 
 use crate::{database::models::player::Player, util::r#macro::unwrap_helper};
+use crate::database::models::leaderboard_entry::LeaderboardEntry;
 use crate::util::validation::verbose_result_ok;
 
 use self::models::{achievement::Achievement, death::Death, level::Level, r#match::Match, punishment::Punishment, rank::Rank, session::Session};
@@ -24,6 +28,7 @@ pub trait CollectionOwner<T> {
 
 pub struct Database {
     pub mongo: mongodb::Database,
+    pub client: Client,
     pub tags: Collection<Tag>,
     pub achievements: Collection<Achievement>,
     pub players: Collection<Player>,
@@ -32,11 +37,21 @@ pub struct Database {
     pub ranks: Collection<Rank>,
     pub matches: Collection<Match>,
     pub deaths: Collection<Death>,
-    pub levels: Collection<Level>
+    pub levels: Collection<Level>,
+    pub lb_entries: Collection<LeaderboardEntry>
 }
 
 impl Database {
-    pub async fn consume_cursor_into_owning_vec_option<T: DeserializeOwned + Unpin + Send + Sync>(cursor: Option<Cursor<T>>) 
+    pub async fn consume_cursor_into_owning_vec_result<T: DeserializeOwned + Unpin + Send + Sync, E: Display>(cursor: Result<Cursor<T>, E>)
+          -> Vec<T> {
+        Self::consume_cursor_into_owning_vec_option(
+            verbose_result_ok(
+                String::from("Error when retrieving database cursor"),
+                cursor
+            )
+        ).await
+    }
+    pub async fn consume_cursor_into_owning_vec_option<T: DeserializeOwned + Unpin + Send + Sync>(cursor: Option<Cursor<T>>)
         -> Vec<T> {
             match cursor {
                 Some(cursor) => Database::consume_cursor_into_owning_vec(cursor).await,
@@ -164,6 +179,18 @@ impl Database {
         }, doc! { "$set": serialized }, Some(update_opts)).await;
     }
 
+    pub async fn save_using_query<R>(&self, record: &R, record_query: Document) where R: CollectionOwner<R> + Serialize {
+        let collection = R::get_collection(&self);
+        let bson = mongodb::bson::to_bson(record).unwrap();
+        let serialized = bson.as_document().unwrap();
+        let update_opts = UpdateOptions::builder().upsert(Some(true)).build();
+        let _ = collection.update_one(
+            record_query,
+            doc! { "$set": serialized },
+            Some(update_opts)
+        ).await;
+    }
+
     pub async fn insert_one<R>(&self, record: &R) where R: CollectionOwner<R> + Serialize + IdentifiableDocument {
         let collection = R::get_collection(&self);
         // let bson = mongodb::bson::to_bson(record).unwrap();
@@ -211,10 +238,46 @@ pub async fn connect(db_url: &String, min_pool_size: Option<u32>, max_pool_size:
     let matches = db.collection::<Match>(Match::get_collection_name());
     let levels = db.collection::<Level>(Level::get_collection_name());
     let deaths = db.collection::<Death>(Death::get_collection_name());
+    let lb_entries = {
+        if !collection_exists(&db, LeaderboardEntry::get_collection_name()).await {
+            debug!("Creating {} collection...", LeaderboardEntry::get_collection_name());
+            let mut create_collection_opts = CreateCollectionOptions::default();
+            // 1-day
+            let bucket_max_span = Duration::from_secs(60 * 60 * 24);
+            create_collection_opts.timeseries = Some(
+                TimeseriesOptions::builder()
+                    .time_field(LeaderboardEntry::get_timestamp_field())
+                    .bucket_max_span(Some(bucket_max_span.clone()))
+                    .bucket_rounding(Some(bucket_max_span.clone()))
+                    .build()
+            );
+            match db.create_collection(
+                LeaderboardEntry::get_collection_name(), create_collection_opts
+            ).await {
+                Ok(_) => {}
+                Err(err) => {
+                    warn!("Error creating lb_entries collection: {}", err)
+                }
+            };
+        }
+        db.collection::<LeaderboardEntry>(LeaderboardEntry::get_collection_name())
+    };
 
     info!("Connected to database successfully.");
     Ok(Database { 
-        mongo: db, tags, achievements, players, sessions, 
-        punishments, ranks, matches, levels, deaths 
+        mongo: db, client, tags, achievements, players, sessions,
+        punishments, ranks, matches, levels, deaths, lb_entries
     })
+}
+
+async fn collection_exists(database: &mongodb::Database, coll_name: &str) -> bool {
+    let coll_list = unwrap_helper::result_return_default!(
+        database.list_collection_names(doc! {}).await, false
+    );
+    for name in coll_list {
+        if name == coll_name {
+            return true;
+        }
+    }
+    false
 }

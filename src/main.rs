@@ -17,6 +17,8 @@ mod http;
 mod socket;
 
 fn setup_logger() -> Result<(), fern::InitError> {
+    let is_debug = env::var("MARS_DEBUG").unwrap_or("false".to_owned())
+        .parse::<bool>().unwrap_or(false);
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -27,7 +29,11 @@ fn setup_logger() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Debug)
+        .level(if is_debug {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .chain(std::io::stdout())
         // .chain(fern::log_file("application.mars.log")?)
         .apply()?;
@@ -43,7 +49,7 @@ pub struct MarsAPIState {
     pub redis: Arc<RedisAdapter>,
     pub player_cache: Arc<Cache<Player>>,
     pub match_cache: Arc<Cache<Match>>,
-    pub leaderboards: Arc<MarsLeaderboards>,
+    pub leaderboards: Arc<MarsLeaderboards>
 }
 
 fn rocket(state: MarsAPIState) -> Rocket<Build> {

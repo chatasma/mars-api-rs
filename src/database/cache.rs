@@ -20,7 +20,7 @@ pub struct Cache<R> {
     pub resource_type: PhantomData<R>
 }
 
-impl<R> Cache<R> where R: CollectionOwner<R> + DeserializeOwned + Unpin + Sync + std::marker::Send 
+impl<R> Cache<R> where R: CollectionOwner<R> + DeserializeOwned + Unpin + Sync + std::marker::Send
     + Serialize + IdentifiableDocument {
     fn generate_formatted_key(&self, key: &str) -> String {
         format!("{}:{}", self.resource_name, key.to_lowercase())
@@ -111,7 +111,7 @@ pub async fn get_redis_pool(redis_host: &Option<String>) -> anyhow::Result<Redis
         None => Err(ConfigMissingFieldError {field_name: String::from("redis-host") }.into()),
         Some(redis_host) => {
             let redis_uri = format!("redis://{}", redis_host);
-            println!("Connecting to redis at {}", &redis_uri);
+            info!("Connecting to redis at {}", &redis_uri);
             let client = redis::Client::open(redis_uri)?;
             let manager = RedisConnectionManager::new(client);
             let pool = Pool::builder()
@@ -172,6 +172,18 @@ impl RedisAdapter {
         let mut conn = self.pool.get().await?;
         let raw : String = redis::cmd("GET").arg(key).query_async::<Connection, String>(&mut conn).await?;
         Ok(json::from_str::<T>(&raw)?)
+    }
+
+    pub async fn del_key(&self, key: &str) -> anyhow::Result<bool> {
+        let mut conn = self.pool.get().await?;
+        let deleted = redis::cmd("DEL").arg(key).query_async::<Connection, u64>(&mut conn).await?;
+        Ok(deleted > 0)
+    }
+
+    pub async fn has_key(&self, key: &str) -> anyhow::Result<bool> {
+        let mut conn = self.pool.get().await?;
+        let exists_i = redis::cmd("EXISTS").arg(key).query_async::<Connection, u64>(&mut conn).await?;
+        Ok(exists_i == 1)
     }
 
     pub async fn submit<T, O: Future<Output = T>, F: FnOnce(mobc::Connection<RedisConnectionManager>) -> O>(&self, task: F) -> anyhow::Result<T> {

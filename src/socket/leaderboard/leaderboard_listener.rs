@@ -22,25 +22,25 @@ impl PlayerListener for LeaderboardListener {
 
             match match_result {
                 PlayerMatchResult::Win => {
-                    server_context.api_state.leaderboards.wins.increment(&context.get_id_name(), Some(1)).await;
+                    server_context.api_state.leaderboards.wins.process_update(context.get_id_name(), 1).await;
                 },
                 PlayerMatchResult::Lose => {
-                    server_context.api_state.leaderboards.losses.increment(&context.get_id_name(), Some(1)).await;
+                    server_context.api_state.leaderboards.losses.process_update(context.get_id_name(), 1).await;
                 },
                 PlayerMatchResult::Tie => {
-                    server_context.api_state.leaderboards.ties.increment(&context.get_id_name(), Some(1)).await;
+                    server_context.api_state.leaderboards.ties.process_update(context.get_id_name(), 1).await;
                 },
                 _ => {} 
             }
 
-            server_context.api_state.leaderboards.matches_played.increment(&context.get_id_name(), Some(1)).await;
-            server_context.api_state.leaderboards.messages_sent.increment(
-                &context.get_id_name(), 
-                Some(context.stats.messages.total())
+            server_context.api_state.leaderboards.matches_played.process_update(context.get_id_name(), 1).await;
+            server_context.api_state.leaderboards.messages_sent.process_update(
+                context.get_id_name(),
+                context.stats.messages.total()
             ).await;
-            server_context.api_state.leaderboards.game_playtime.increment(
-                &context.get_id_name(), 
-                Some(u32::try_from(context.stats.game_playtime).unwrap_or(0))
+            server_context.api_state.leaderboards.game_playtime.process_update(
+                context.get_id_name(),
+                u32::try_from(context.stats.game_playtime).unwrap_or(0)
             ).await;
         };
     }
@@ -59,9 +59,9 @@ impl PlayerListener for LeaderboardListener {
                 return;
             };
 
-            server_context.api_state.leaderboards.kills.increment(&context.get_id_name(), Some(1)).await;
+            server_context.api_state.leaderboards.kills.process_update(context.get_id_name(), 1).await;
             if first_blood {
-                server_context.api_state.leaderboards.first_bloods.increment(&context.get_id_name(), Some(1)).await;
+                server_context.api_state.leaderboards.first_bloods.process_update(context.get_id_name(), 1).await;
             };
         }
     }
@@ -79,7 +79,7 @@ impl PlayerListener for LeaderboardListener {
                 return;
             };
 
-            server_context.api_state.leaderboards.deaths.increment(&context.get_id_name(), Some(1)).await;
+            server_context.api_state.leaderboards.deaths.process_update(context.get_id_name(), 1).await;
         };
     }
 
@@ -94,7 +94,7 @@ impl PlayerListener for LeaderboardListener {
             if !current_match.is_tracking_stats() {
                 return;
             };
-            server_context.api_state.leaderboards.highest_killstreak.set_if_higher(&context.get_id_name(), amount).await;
+            server_context.api_state.leaderboards.highest_killstreak.process_update(context.get_id_name(), amount).await;
         };
     }
 
@@ -109,8 +109,8 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.destroyable_destroys.increment(&context.get_id_name(), Some(1)).await;
-        server_context.api_state.leaderboards.destroyable_block_destroys.increment(&context.get_id_name(), Some(block_count)).await;
+        server_context.api_state.leaderboards.destroyable_destroys.process_update(context.get_id_name(), 1).await;
+        server_context.api_state.leaderboards.destroyable_block_destroys.process_update(context.get_id_name(), block_count).await;
     }
 
     async fn on_core_leak(
@@ -124,8 +124,8 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.core_leaks.increment(&context.get_id_name(), Some(1)).await;
-        server_context.api_state.leaderboards.core_block_destroys.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.core_leaks.process_update(context.get_id_name(), 1).await;
+        server_context.api_state.leaderboards.core_block_destroys.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_flag_place(
@@ -138,8 +138,8 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.flag_captures.increment(&context.get_id_name(), Some(1)).await;
-        server_context.api_state.leaderboards.flag_hold_time.increment(&context.get_id_name(), Some(u32::try_from(held_time).unwrap())).await;
+        server_context.api_state.leaderboards.flag_captures.process_update(context.get_id_name(), 1).await;
+        server_context.api_state.leaderboards.flag_hold_time.process_update(context.get_id_name(), u32::try_from(held_time).unwrap()).await;
     }
 
     async fn on_flag_pickup(
@@ -151,7 +151,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.flag_pickups.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.flag_pickups.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_flag_drop(
@@ -164,8 +164,8 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.flag_drops.increment(&context.get_id_name(), Some(1)).await;
-        server_context.api_state.leaderboards.flag_hold_time.increment(&context.get_id_name(), Some(u32::try_from(held_time).unwrap())).await;
+        server_context.api_state.leaderboards.flag_drops.process_update(context.get_id_name(), 1).await;
+        server_context.api_state.leaderboards.flag_hold_time.process_update(context.get_id_name(), u32::try_from(held_time).unwrap()).await;
     }
 
     async fn on_flag_defend(
@@ -177,7 +177,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.flag_defends.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.flag_defends.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_wool_place(
@@ -190,7 +190,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.wool_captures.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.wool_captures.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_wool_pickup(
@@ -202,7 +202,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.wool_pickups.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.wool_pickups.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_wool_drop(
@@ -215,7 +215,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.wool_drops.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.wool_drops.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_wool_defend(
@@ -227,7 +227,7 @@ impl PlayerListener for LeaderboardListener {
         if !current_match.is_tracking_stats() {
             return;
         };
-        server_context.api_state.leaderboards.wool_defends.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.wool_defends.process_update(context.get_id_name(), 1).await;
     }
 
     async fn on_control_point_capture(
@@ -241,6 +241,6 @@ impl PlayerListener for LeaderboardListener {
             return;
         };
 
-        server_context.api_state.leaderboards.control_point_captures.increment(&context.get_id_name(), Some(1)).await;
+        server_context.api_state.leaderboards.control_point_captures.process_update(context.get_id_name(), 1).await;
     }
 }

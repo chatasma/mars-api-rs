@@ -10,6 +10,7 @@ use sha2::{Sha256, Digest};
 
 use self::payloads::{PlayerPreLoginResponse, PlayerPreLoginResponder, PlayerLoginResponse, PlayerLogoutRequest, PlayerProfileResponder, PlayerProfileResponse, PlayerAltResponse};
 use std::{time::{SystemTime, UNIX_EPOCH}, collections::HashMap};
+use crate::socket::leaderboard::leaderboard_new::LeaderboardV2;
 
 use super::punishment::payloads::PunishmentIssueRequest;
 
@@ -186,7 +187,7 @@ pub async fn logout(
     session.ended_at = Some(time_millis);
     player.stats.server_playtime += data.playtime;
 
-    state.leaderboards.server_playtime.increment(&player.id_name(), Some(u32::try_from(data.playtime).unwrap_or(u32::MAX))).await; // Will break in 2106
+    state.leaderboards.server_playtime.process_update(player.id_name(), u32::try_from(data.playtime).unwrap_or(u32::MAX)).await; // Will break in 2106
 
     let record_session = if let Some(session_record) = &player.stats.records.longest_session {
         Some(session_record.length.clone())
@@ -217,7 +218,7 @@ pub async fn profile(
         return Ok(PlayerProfileResponder::RawProfile(profile))
     };
     // omitted: messages sent, server + game playtime
-    let included_lbs : Vec<&Leaderboard> = vec![
+    let included_lbs : Vec<&LeaderboardV2> = vec![
         &state.leaderboards.kills, 
         &state.leaderboards.deaths,
         &state.leaderboards.first_bloods,
@@ -248,14 +249,14 @@ pub async fn profile(
 
         // move owned id string into closure
         let wrapper = |player_id: String| async move {
-            (lb.score_type.clone(), lb.get_position(&player_id, &LeaderboardPeriod::AllTime).await)
+            (lb.score_type.clone(), lb.query_standing(player_id.clone(), LeaderboardPeriod::AllTime).await)
         };
 
         lb_position_tasks.push(wrapper(player.id_name()));
     }
 
     join_all(lb_position_tasks).await.into_iter().filter(|pos_opt| pos_opt.1.is_some()).for_each(|pos| {
-        positions.insert(pos.0, pos.1.unwrap());
+        positions.insert(pos.0, pos.1.unwrap() as u64);
     });
     Ok(PlayerProfileResponder::ProfileWithLeaderboardPositions(PlayerProfileResponse {
         player: profile,
