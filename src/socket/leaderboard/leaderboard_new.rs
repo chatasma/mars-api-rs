@@ -164,7 +164,7 @@ impl LeaderboardV2 {
                     self.score_type.to_string(), period.to_string(),
                     &player_id, new_value
                 );
-                self.set(&player_id, new_value).await;
+                self.set_for_period(&player_id, new_value, &period).await;
             }
         }).collect::<Vec<_>>());
         // todo, join these somehow -- it seems to be a bit trickier than a join_all...
@@ -212,6 +212,14 @@ impl LeaderboardV2 {
             for period in LeaderboardPeriod::iter() {
                 let _ = redis::cmd("ZADD").arg(&self.get_view_id(&period)).arg(u64_score).arg(id).query_async::<Connection, ()>(&mut conn).await;
             };
+        }).await;
+    }
+
+    pub async fn set_for_period(&self, id: &String, score: u32, period: &LeaderboardPeriod) {
+        let u64_score = score as u64;
+        let _ = self.cache.submit(|mut conn| async move {
+            let _ = redis::cmd("ZADD").arg(&self.get_view_id(period)).arg(u64_score).arg(id)
+                .query_async::<Connection, ()>(&mut conn).await;
         }).await;
     }
 
@@ -336,7 +344,7 @@ impl LeaderboardV2 {
             debug!("[{}/{}] Populating standings", self.score_type.to_string(), period.to_string());
             // Redis tasks
             let tasks = standings.iter().map(|(player, record)| {
-                self.set(player, record.clone())
+                self.set_for_period(player, record.clone(), period)
             }).collect::<Vec<_>>();
             join_all(tasks).await;
             debug!("[{}/{}] Populated standings", self.score_type.to_string(), period.to_string());
