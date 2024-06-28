@@ -249,7 +249,7 @@ pub async fn profile(
 
         // move owned id string into closure
         let wrapper = |player_id: String| async move {
-            (lb.score_type.clone(), lb.query_standing(player_id.clone(), LeaderboardPeriod::AllTime).await)
+            (lb.score_type.clone(), lb.query_standing_cached(&player_id, &LeaderboardPeriod::AllTime).await)
         };
 
         lb_position_tasks.push(wrapper(player.id_name()));

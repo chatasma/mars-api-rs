@@ -79,9 +79,9 @@ impl LeaderboardV2 {
         let completion_datetime = bson::DateTime::from_millis(completion_time as i64);
 
         // find our standing
-        let standing = self.query_standing(
-            player_id.clone(),
-            LeaderboardPeriod::get_most_granular_period()
+        let daily_standing = self.query_standing_cached(
+            &player_id,
+            &LeaderboardPeriod::get_most_granular_period()
         ).await.unwrap_or(0);
         // determine if standing is outperformed
         let requires_update = match self.score_type.get_aggregation_type() {
@@ -91,7 +91,7 @@ impl LeaderboardV2 {
             // for max we need to know the current standing before we can
             // decide if an update is needed
             ScoreTypeAggregation::Max => {
-                value > standing
+                value > daily_standing
             }
         };
 
@@ -100,7 +100,7 @@ impl LeaderboardV2 {
             return
         }
 
-        let new_value = self.score_type.get_aggregation_type().compare(standing, value);
+        let daily_new_value = self.score_type.get_aggregation_type().compare(daily_standing, value);
 
         // update standing in lb_entries
         let lb_entry_update_future = async {
@@ -135,7 +135,7 @@ impl LeaderboardV2 {
                 player_id: player_id.clone(),
                 timestamp: completion_datetime.clone(),
                 score_type: self.score_type.clone(),
-                value: new_value
+                value: daily_new_value
             }, None).await.expect("No errors when inserting the new lb entry");
         };
 
@@ -159,6 +159,23 @@ impl LeaderboardV2 {
                 let reader = lb_metadata.read().await;
                 let metadata = reader.get(&period).unwrap();
                 let lock_borrow = metadata.lock.read().await;
+
+                let new_value = if period == LeaderboardPeriod::get_most_granular_period() {
+                    daily_new_value
+                } else {
+                    let current_period_standing = self.query_standing_cached(
+                        &player_id,
+                        &period
+                    ).await.unwrap_or(0);
+                    debug!("[{}/{}] Current standing of player {}: {}",
+                        self.score_type.to_string(), period.to_string(),
+                        &player_id, &current_period_standing
+                    );
+                    let new_period_standing = self.score_type.get_aggregation_type().compare(
+                        current_period_standing, value
+                    );
+                    new_period_standing
+                };
                 // basic ZADD
                 debug!("[{}/{}] Setting score of player {} to {} in cached leaderboard",
                     self.score_type.to_string(), period.to_string(),
@@ -172,18 +189,27 @@ impl LeaderboardV2 {
         lb_entry_update_future.await;
     }
 
-    pub async fn query_standing(&self, player_id: String, period: LeaderboardPeriod) -> Option<u32> {
-        // query `lb_entries` on player_id, score_type, time_range as deduced by lb period
-        // get 1 document representing the current u32 standing
-        let query = self.get_query(Some(player_id.clone()), period.get_date_range_with_now_as_upperbound());
-        debug!("[{}/{}] Standing query for {}: {}", self.score_type.to_string(),
-            period.to_string(),
-            &player_id, query.to_string()
-        );
-        verbose_result_ok(
-            format!("Failed to retrieve standing for {}", player_id.clone()),
-            self.database.lb_entries.find_one(query, None).await
-        ).flatten().map(|lbe| lbe.value)
+    // async fn query_standing(&self, player_id: String, period: &LeaderboardPeriod) -> Option<u32> {
+    //     // query `lb_entries` on player_id, score_type, time_range as deduced by lb period
+    //     // get 1 document representing the current u32 standing
+    //     let query = self.get_query(Some(player_id.clone()), period.get_date_range_with_now_as_upperbound());
+    //     debug!("[{}/{}] Standing query for {}: {}", self.score_type.to_string(),
+    //         period.to_string(),
+    //         &player_id, query.to_string()
+    //     );
+    //     verbose_result_ok(
+    //         format!("Failed to retrieve standing for {}", player_id.clone()),
+    //         self.database.lb_entries.find_one(query, None).await
+    //     ).flatten().map(|lbe| lbe.value)
+    // }
+
+    pub async fn query_standing_cached(&self, player_id: &String, period: &LeaderboardPeriod) -> Option<u32> {
+        self.cache.submit(|mut conn| async move {
+            match redis::cmd("ZSCORE").arg(&self.get_view_id(&period)).arg(player_id).query_async::<Connection, String>(&mut conn).await {
+                Ok(res) => { res.parse::<u32>().unwrap() },
+                Err(_) => { 0u32 }
+            }
+        }).await.ok()
     }
 
     fn get_query(&self, player_id: Option<String>, time_range: LeaderboardPeriodDateTimeRange) -> Document {
