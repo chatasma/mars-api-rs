@@ -328,29 +328,29 @@ pub fn sha256_hash_formatted(digest: &String) -> String {
     })
 }
 
-#[get("/<player_id>/lookup?<include_alts>")]
+#[get("/<player_id>/lookup?<alts>")]
 pub async fn lookup_player(
     state: &State<MarsAPIState>, 
     player_id: &str,
-    include_alts: bool,
+    alts: bool,
     _auth_guard: AuthorizationToken
 ) -> Result<JsonResponder<PlayerLookupResponse>, ApiErrorResponder> {
     let player : Player = async_extract_player_from_url_v2!(&player_id, state);
-    let alts : Vec<PlayerAltResponse> = {
-        let mut alts : Vec<PlayerAltResponse> = Vec::new();
-        if include_alts {
+    let player_alts : Vec<PlayerAltResponse> = {
+        let mut player_alts : Vec<PlayerAltResponse> = Vec::new();
+        if alts {
             let fetched_alts = state.database.get_alts_for_player(&player).await;
             let pun_tasks : Vec<_> = fetched_alts.iter().map(|alt| {
                 state.database.get_player_punishments(alt)
             }).collect();
             let alt_puns = join_all(pun_tasks).await;
             for (alt, puns) in fetched_alts.into_iter().zip(alt_puns) {
-                alts.push(PlayerAltResponse { player: alt, punishments: puns });
+                player_alts.push(PlayerAltResponse { player: alt, punishments: puns });
             }
         };
-        alts
+        player_alts
     };
-    Ok(JsonResponder::created(PlayerLookupResponse { player, alts }))
+    Ok(JsonResponder::created(PlayerLookupResponse { player, alts: player_alts }))
 }
 
 #[post("/<player_id>/notes", format = "json", data = "<add_note_req>")]
