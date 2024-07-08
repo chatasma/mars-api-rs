@@ -2,6 +2,8 @@ use std::{collections::HashMap};
 
 
 use futures::future::join_all;
+use mongodb::bson::doc;
+use mongodb::options::UpdateOptions;
 use rocket::serde::{json::{serde_json, Value}, DeserializeOwned};
 
 use uuid::Uuid;
@@ -655,19 +657,64 @@ impl SocketRouter {
     }
 
     async fn on_achievement_complete(&mut self, data: PlayerAchievementData) -> Result<(), SocketError> {
-        // confirm the achievement exists
-        let achievement_exists = Database::find_by_id(&self.server.api_state.database.achievements, data.achievement_id.as_str()).await.is_some();
-        if !achievement_exists {
+        // Confirm the achievement exists and retrieve it
+        let achievement_id = data.achievement_id.as_str();
+        let database = &self.server.api_state.database;
+        let collection = &database.achievements;
+
+        if let Some(mut achievement) = Database::find_by_id(collection, achievement_id).await {
+            // Check if first_completion is None
+            println!("\n\nID: {}\n\n", achievement.first_completion);
+            if Uuid::parse_str(&*achievement.first_completion).unwrap().is_nil() {
+                // Set first_completion to the current PlayerAchievementData
+                achievement.first_completion = data.player.id;
+
+                // Manually handle the update operation and log any errors
+                let bson = match mongodb::bson::to_bson(&achievement) {
+                    Ok(bson) => bson,
+                    Err(err) => {
+                        log::error!("Failed to serialize achievement: {:?}", err);
+                        return Err(SocketError::Unknown("Failed to serialize achievement".into()));
+                    }
+                };
+
+                let serialized = match bson.as_document() {
+                    Some(doc) => doc,
+                    None => {
+                        log::error!("Serialization produced an invalid document");
+                        return Err(SocketError::Unknown("Serialization produced an invalid document".into()));
+                    }
+                };
+
+                let update_opts = UpdateOptions::builder().upsert(Some(true)).build();
+                if let Err(err) = collection.update_one(
+                    doc! { "_id": achievement.id.clone() },
+                    doc! { "$set": serialized },
+                    Some(update_opts),
+                ).await {
+                    log::error!("Failed to save achievement: {:?}", err);
+                    return Err(SocketError::Unknown("Failed to save achievement".into()));
+                }
+            }
+        } else {
+            // If the achievement doesn't exist, return early
             return Ok(());
         }
+
+        // Retrieve and update the player
         let mut player = unwrap_helper::return_default!(
-            self.server.api_state.player_cache.get(&self.server.api_state.database, data.player.name.as_str()).await,
-            Ok(())
-        );
+        self.server.api_state.player_cache.get(database, data.player.name.as_str()).await,
+        Ok(())
+    );
+
+        // Insert the achievement data into the player's stats
         player.stats.achievements.insert(data.achievement_id.clone(), AchievementData {
             completion_time: data.completion_time
         });
-        self.server.api_state.player_cache.set(&self.server.api_state.database, &player.name, &player, true).await;
+
+        // Save the updated player data
+        self.server.api_state.player_cache.set(database, &player.name, &player, true).await;
+
         Ok(())
     }
 

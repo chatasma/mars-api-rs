@@ -3,6 +3,7 @@ use mars_api_rs_derive::IdentifiableDocument;
 use serde::{Deserialize, Serialize};
 
 use crate::database::CollectionOwner;
+use crate::socket::player::player_events::PlayerAchievementData;
 
 impl CollectionOwner<Achievement> for Achievement {
     fn get_collection(database: &crate::database::Database) -> &mongodb::Collection<Achievement> {
@@ -24,7 +25,8 @@ pub struct Achievement {
     pub description: String,
     #[serde(rename = "category")]
     pub metadata: Option<AchievementMetadata>,
-    pub agent: Agent
+    pub agent: Agent,
+    pub first_completion: String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
