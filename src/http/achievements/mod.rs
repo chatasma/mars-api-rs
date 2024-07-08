@@ -20,7 +20,8 @@ mod payload;
 #[post("/", format = "json", data = "<achievement_create_req>")]
 async fn add_achievement(
     state: &State<MarsAPIState>,
-    achievement_create_req: Json<AchievementCreateRequest>
+    achievement_create_req: Json<AchievementCreateRequest>,
+    _auth_guard: AuthorizationToken
 ) -> Result<JsonResponder<Achievement>, ApiErrorResponder> {
     match state.database.find_by_id_or_name::<Achievement>(&achievement_create_req.name).await {
         Some(_tag) => return Err(ApiErrorResponder::achievement_conflict()),
@@ -39,7 +40,7 @@ async fn add_achievement(
         description, 
         metadata, 
         agent,
-        first_completion: Uuid::nil().to_string()
+        first_completion: None
     };
     state.database.save::<Achievement>(&new_achievement).await;
     return Ok(JsonResponder::from(new_achievement, Status::Ok));
@@ -48,7 +49,8 @@ async fn add_achievement(
 #[delete("/<achievement_id>")]
 async fn delete_achievement(
     state: &State<MarsAPIState>,
-    achievement_id: &str
+    achievement_id: &str,
+    _auth_guard: AuthorizationToken
 ) -> Result<(), ApiErrorResponder> {
     match state.database.delete_by_id::<Achievement>(achievement_id).await {
         Some(DeleteResult { deleted_count: 0, .. }) | None => {
