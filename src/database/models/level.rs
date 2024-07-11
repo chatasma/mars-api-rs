@@ -81,10 +81,10 @@ pub struct LevelContributor {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum LevelGamemode {
-    #[strum(props(fancy = "Attack/Defend"))]
-    AttackDefend,
     #[strum(props(fancy = "Arcade"))]
     Arcade,
+    #[strum(props(fancy = "Attack/Defend"))]
+    AttackDefend,
     #[strum(props(fancy = "Bed Wars"))]
     Bedwars,
     #[strum(props(fancy = "Blitz"))]
@@ -95,38 +95,40 @@ pub enum LevelGamemode {
     Bridge,
     #[strum(props(fancy = "Capture the Flag"))]
     CaptureTheFlag,
-    #[strum(props(fancy = "Control the Point"))]
-    ControlThePoint,
     #[strum(props(fancy = "Capture the Wool"))]
     CaptureTheWool,
+    #[strum(props(fancy = "Control the Point"))]
+    ControlThePoint,
+    #[strum(props(fancy = "Deathmatch"))]
+    Deathmatch,
     #[strum(props(fancy = "Destroy the Core"))]
     DestroyTheCore,
     #[strum(props(fancy = "Destroy the Monument"))]
     DestroyTheMonument,
-    #[strum(props(fancy = "Free For All"))]
-    FreeForAll,
+    #[strum(props(fancy = "5 Control Points"))]
+    FiveControlPoint,
     #[strum(props(fancy = "Flag Football"))]
     FlagFootball,
+    #[strum(props(fancy = "Free For All"))]
+    FreeForAll,
     #[strum(props(fancy = "Infection"))]
     Infection,
-    #[strum(props(fancy = "King of the Hill"))]
-    KingOfTheHill,
     #[strum(props(fancy = "King of the Flag"))]
     KingOfTheFlag,
+    #[strum(props(fancy = "King of the Hill"))]
+    KingOfTheHill,
     #[strum(props(fancy = "Mixed"))]
     Mixed,
     #[strum(props(fancy = "Payload"))]
     Payload,
-    #[strum(props(fancy = "Rage"))]
-    Rage,
     #[strum(props(fancy = "Race for Wool"))]
     RaceForWool,
+    #[strum(props(fancy = "Rage"))]
+    Rage,
     #[strum(props(fancy = "Scorebox"))]
     Scorebox,
     #[strum(props(fancy = "Skywars"))]
     Skywars,
     #[strum(props(fancy = "Survival Games"))]
-    SurvivalGames,
-    #[strum(props(fancy = "Deathmatch"))]
-    Deathmatch
+    SurvivalGames
 }
