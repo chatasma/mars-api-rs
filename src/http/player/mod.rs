@@ -10,6 +10,7 @@ use sha2::{Sha256, Digest};
 
 use self::payloads::{PlayerPreLoginResponse, PlayerPreLoginResponder, PlayerLoginResponse, PlayerLogoutRequest, PlayerProfileResponder, PlayerProfileResponse, PlayerAltResponse};
 use std::{time::{SystemTime, UNIX_EPOCH}, collections::HashMap};
+use crate::database::models::ip_identity::IpIdentity;
 
 use super::punishment::payloads::PunishmentIssueRequest;
 
@@ -31,7 +32,8 @@ pub async fn prelogin(
     if let Some(mut returning_player) = player_optional {
         returning_player.name = data.player.name.clone();
         returning_player.name_lower = returning_player.name.to_lowercase();
-        if !returning_player.ips.contains(&ip) {
+        let new_ip = !returning_player.ips.contains(&ip);
+        if new_ip {
             returning_player.ips.push(ip.clone());
         };
 
@@ -60,6 +62,10 @@ pub async fn prelogin(
         };
         state.player_cache.set(&state.database, &returning_player.name, &returning_player, true).await;
         state.database.ensure_player_name_uniqueness(&data.player.name, &data.player.id).await;
+        // denormalize ip player relationship
+        if new_ip {
+            IpIdentity::add_player_ip(&state.database, &ip,  &returning_player.id).await;
+        }
 
         Ok(PlayerPreLoginResponder { 
             response: PlayerPreLoginResponse {
@@ -70,13 +76,13 @@ pub async fn prelogin(
             }
         })
     } else {
-        println!("Could not find player {} in database!", player_id);
+        debug!("Could not find player {} in database!", player_id);
         let time_millis : f64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as f64;
         let player = Player {
             id: data.player.id.clone(),
             name: data.player.name.clone(),
             name_lower: data.player.name.to_lowercase(),
-            ips: vec![ip],
+            ips: vec![ip.clone()],
             first_joined_at: time_millis,
             last_joined_at: time_millis,
             rank_ids: Vec::new(),
@@ -91,6 +97,7 @@ pub async fn prelogin(
 
         state.player_cache.set(&state.database, &player.name, &player, true).await;
         state.database.ensure_player_name_uniqueness(&data.player.name, &data.player.id).await;
+        IpIdentity::add_player_ip(&state.database, &ip, &data.player.id).await;
 
         Ok(PlayerPreLoginResponder {
             response: PlayerPreLoginResponse {
@@ -184,7 +191,7 @@ pub async fn logout(
 
     let time_millis : u64 = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()).unwrap_or(u64::MAX);
     session.ended_at = Some(time_millis);
-    player.stats.server_playtime += data.playtime;
+    player.stats.server_playtime += (data.playtime as i64);
 
     state.leaderboards.server_playtime.increment(&player.id_name(), Some(u32::try_from(data.playtime).unwrap_or(u32::MAX))).await; // Will break in 2106
 
@@ -339,7 +346,10 @@ pub async fn lookup_player(
     let player_alts : Vec<PlayerAltResponse> = {
         let mut player_alts : Vec<PlayerAltResponse> = Vec::new();
         if alts {
+            let t1 = get_u64_time_millis();
             let fetched_alts = state.database.get_alts_for_player(&player).await;
+            let t2 = get_u64_time_millis();
+            debug!("Alt lookup for {} took {}ms", &player.name, (t2 - t1));
             let pun_tasks : Vec<_> = fetched_alts.iter().map(|alt| {
                 state.database.get_player_punishments(alt)
             }).collect();

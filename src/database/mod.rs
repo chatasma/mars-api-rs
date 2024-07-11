@@ -1,4 +1,5 @@
 use std::{str::FromStr, time::Duration};
+use std::collections::HashSet;
 
 use mars_api_rs_macro::IdentifiableDocument;
 use mongodb::{options::{ClientOptions, FindOneOptions, UpdateOptions}, Client, Collection, bson::{doc, oid::ObjectId}, Cursor, results::DeleteResult};
@@ -8,13 +9,17 @@ use rocket::serde::DeserializeOwned;
 use futures::StreamExt;
 use serde::Serialize;
 use anyhow::anyhow;
+use futures::stream::FuturesUnordered;
+use rocket::form::validate::Contains;
 
 use crate::{database::models::player::Player, util::r#macro::unwrap_helper};
+use crate::database::models::ip_identity::IpIdentity;
 use crate::util::validation::verbose_result_ok;
 
 use self::models::{achievement::Achievement, death::Death, level::Level, r#match::Match, punishment::Punishment, rank::Rank, session::Session};
 
 pub mod models;
+pub mod migrations;
 pub mod cache;
 
 pub trait CollectionOwner<T> {
@@ -32,7 +37,8 @@ pub struct Database {
     pub ranks: Collection<Rank>,
     pub matches: Collection<Match>,
     pub deaths: Collection<Death>,
-    pub levels: Collection<Level>
+    pub levels: Collection<Level>,
+    pub ip_identities: Collection<IpIdentity>
 }
 
 impl Database {
@@ -148,10 +154,26 @@ impl Database {
     }
 
     pub async fn get_alts_for_player(&self, player: &Player) -> Vec<Player> {
-        let cursor = unwrap_helper::result_return_default!(self.players.find(doc! {
-            "ips": {"$in": &player.ips}, "_id": {"$ne": &player.id}
-        }, None).await, Vec::new());
-        Database::consume_cursor_into_owning_vec(cursor).await
+        let unordered_futures = FuturesUnordered::new();
+        for ip in &player.ips {
+            unordered_futures.push(IpIdentity::find_players_for_ip(self, ip));
+        }
+        let players = {
+            let players_with_duplicates = unordered_futures.collect::<Vec<_>>().await
+                .into_iter().flatten().collect::<Vec<_>>();
+            let mut player_set : Vec<Player> = Vec::new();
+            for player in players_with_duplicates {
+                if !player_set.iter().map(|p| p.id.clone()).collect::<Vec<_>>().contains(&player.id) {
+                    player_set.push(player);
+                }
+            }
+            player_set
+        };
+        players
+        // let cursor = unwrap_helper::result_return_default!(self.players.find(doc! {
+        //     "ips": {"$in": &player.ips}, "_id": {"$ne": &player.id}
+        // }, None).await, Vec::new());
+        // Database::consume_cursor_into_owning_vec(cursor).await
     }
 
     pub async fn save<R>(&self, record: &R) where R: CollectionOwner<R> + Serialize + IdentifiableDocument {
@@ -211,10 +233,11 @@ pub async fn connect(db_url: &String, min_pool_size: Option<u32>, max_pool_size:
     let matches = db.collection::<Match>(Match::get_collection_name());
     let levels = db.collection::<Level>(Level::get_collection_name());
     let deaths = db.collection::<Death>(Death::get_collection_name());
+    let ip_identities = db.collection::<IpIdentity>(IpIdentity::get_collection_name());
 
     info!("Connected to database successfully.");
     Ok(Database { 
         mongo: db, tags, achievements, players, sessions, 
-        punishments, ranks, matches, levels, deaths 
+        punishments, ranks, matches, levels, deaths, ip_identities
     })
 }

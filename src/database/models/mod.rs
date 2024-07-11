@@ -12,3 +12,4 @@ pub mod death;
 pub mod join_sound;
 pub mod server;
 pub mod achievement;
+pub mod ip_identity;

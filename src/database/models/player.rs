@@ -85,7 +85,7 @@ pub struct PlayerStats {
     #[serde(default)]
     pub xp: u32,
     #[serde(default)]
-    pub server_playtime: u64,
+    pub server_playtime: i64,
     #[serde(default)]
     pub game_playtime: u64,
     #[serde(default)]

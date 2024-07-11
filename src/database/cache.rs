@@ -111,7 +111,7 @@ pub async fn get_redis_pool(redis_host: &Option<String>) -> anyhow::Result<Redis
         None => Err(ConfigMissingFieldError {field_name: String::from("redis-host") }.into()),
         Some(redis_host) => {
             let redis_uri = format!("redis://{}", redis_host);
-            println!("Connecting to redis at {}", &redis_uri);
+            info!("Connecting to redis at {}", &redis_uri);
             let client = redis::Client::open(redis_uri)?;
             let manager = RedisConnectionManager::new(client);
             let pool = Pool::builder()

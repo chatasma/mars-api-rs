@@ -159,7 +159,7 @@ impl SocketRouter {
     }
     
     async fn on_player_death(&mut self, mut data: PlayerDeathData) -> Result<(), SocketError> {
-        println!("Player death! {}", data.victim.name.clone());
+        debug!("Player death! {}", data.victim.name.clone());
         let mut current_match = unwrap_helper::return_default!(self.server.get_match().await, Err(SocketError::InvalidMatchState));
         if current_match.get_state() != MatchState::InProgress {
             return Err(SocketError::InvalidMatchState);

@@ -7,6 +7,7 @@ use config::{deserialize_mars_config, MarsConfig};
 use database::{Database, cache::{Cache, get_redis_pool, RedisAdapter}, models::{player::Player, r#match::Match}};
 use rocket::{Build, Rocket, Shutdown, Config, figment::Figment};
 use socket::leaderboard::MarsLeaderboards;
+use crate::database::migrations::MigrationExecutor;
 
 use crate::socket::socket_handler::{SocketState, setup_socket};
 
@@ -167,11 +168,14 @@ async fn main() -> Result<(), String> {
         leaderboards
     };
 
+    // let migration_executor = MigrationExecutor::new();
+    // migration_executor.execute_migration_by_name(&*state.database, String::from("denormalize_ip_identities")).await;
+
     let ws_port = env::var("MARS_WS_PORT").unwrap_or("7000".to_owned()).parse::<u32>().unwrap_or(7000);
     let res = tokio::try_join!(
-        setup_rocket(state.clone()), 
+        setup_rocket(state.clone()),
         setup_socket(
-            SocketState { 
+            SocketState {
                 api_state: Arc::new(state.clone())
             }, ws_port
         )

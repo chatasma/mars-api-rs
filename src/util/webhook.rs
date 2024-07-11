@@ -325,7 +325,7 @@ impl WebhookClient {
             .send()
             .await {
                 Err(e) => {
-                    println!("Webhook failed: {}", e);
+                    warn!("Webhook failed: {}", e);
                 },
                 Ok(_) => {}
         };

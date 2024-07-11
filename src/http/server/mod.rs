@@ -47,7 +47,7 @@ async fn server_startup(
         sessions_to_write.push(hanging_session.to_owned());
 
         let mut cached_player = unwrap_helper::continue_default!(state.player_cache.get(&state.database, &hanging_session.player.name).await);
-        cached_player.stats.server_playtime += hanging_session.length().unwrap_or(0);
+        cached_player.stats.server_playtime += (hanging_session.length().unwrap_or(0) as i64);
         players_to_write.push(cached_player);
     }
 
