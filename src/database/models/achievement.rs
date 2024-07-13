@@ -25,6 +25,7 @@ pub struct Achievement {
     #[serde(rename = "category")]
     pub metadata: Option<AchievementMetadata>,
     pub agent: Agent,
+    #[serde(default)]
     pub first_completion: Option<String>
 }
 
