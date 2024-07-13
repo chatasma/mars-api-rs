@@ -24,7 +24,7 @@ impl PlayerXPListener {
         let start_multiplier = if level > XP_BEGINNER_ASSIST_MAX {
             1
         } else {
-            u32::max(XP_BEGINNER_ASSIST_MAX - level, 1)
+            u32::max(XP_BEGINNER_ASSIST_MAX.saturating_sub(level), 1)
         };
         xp * start_multiplier
     }
@@ -114,7 +114,7 @@ impl PlayerListener for PlayerXPListener {
         context: &mut Self::Context,
         held_time: u64
     ) { 
-        let xp = XP_FLAG_OBJECTIVE + (XP_FLAG_TIME_BOUNS - ((held_time / 1000) as u32));
+        let xp = XP_FLAG_OBJECTIVE + (XP_FLAG_TIME_BOUNS.saturating_sub((held_time / 1000) as u32));
         context.add_xp(server_context, xp, &String::from("Captured flag"), true, false).await;
     }
 
@@ -144,7 +144,7 @@ impl PlayerListener for PlayerXPListener {
         contributors: u32, 
     ) {
         let others = contributors + 1;
-        let xp = u32::max(XP_POINT_CAPTURE_MAX - (others * 10), 20);
+        let xp = u32::max(XP_POINT_CAPTURE_MAX.saturating_sub(others * 10), 20);
         context.add_xp(server_context, xp, &String::from("Captured point"), true, false).await;
     }
 
