@@ -168,8 +168,21 @@ async fn main() -> Result<(), String> {
         leaderboards
     };
 
-    // let migration_executor = MigrationExecutor::new();
-    // migration_executor.execute_migration_by_name(&*state.database, String::from("denormalize_ip_identities")).await;
+
+    if env::var("MARS_DATABASE_MIGRATION").is_ok() {
+        let migration = env::var("MARS_DATABASE_MIGRATION").unwrap_or("NONE".to_owned());
+        info!("API will not run, migration is set");
+        info!("Executing migration '{}'...", migration.to_owned());
+        let migration_executor = MigrationExecutor::new();
+        let migration_found = migration_executor.execute_migration_by_name(
+            &*state.database,
+            migration.to_owned()
+        ).await;
+        if !migration_found {
+            warn!("Did not find migration '{}'", &migration);
+        }
+        return Ok(());
+    };
 
     let ws_port = env::var("MARS_WS_PORT").unwrap_or("7000".to_owned()).parse::<u32>().unwrap_or(7000);
     let res = tokio::try_join!(
