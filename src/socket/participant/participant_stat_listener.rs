@@ -126,7 +126,7 @@ impl PlayerListener for ParticipantStatListener {
         _current_match: &mut Match, 
         context: &mut Self::Context
     ) {
-        context.stats.game_playtime += get_u64_time_millis() - context.joined_party_at.unwrap();
+        context.stats.game_playtime += get_u64_time_millis().saturating_sub(context.joined_party_at.unwrap());
     }
 
     async fn on_core_leak(

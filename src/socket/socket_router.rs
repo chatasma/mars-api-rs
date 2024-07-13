@@ -161,7 +161,7 @@ impl SocketRouter {
     }
     
     async fn on_player_death(&mut self, mut data: PlayerDeathData) -> Result<(), SocketError> {
-        debug!("Player death! {}", data.victim.name.clone());
+        // debug!("Player death! {}", data.victim.name.clone());
         let mut current_match = unwrap_helper::return_default!(self.server.get_match().await, Err(SocketError::InvalidMatchState));
         if current_match.get_state() != MatchState::InProgress {
             return Err(SocketError::InvalidMatchState);
@@ -532,9 +532,6 @@ impl SocketRouter {
 
     async fn on_wool_place(&mut self, data: WoolDropData) -> Result<(), SocketError> {
         let mut current_match = unwrap_helper::return_default!(self.server.get_match().await, Err(SocketError::InvalidMatchState));
-        if current_match.get_state() != MatchState::InProgress {
-            return Err(SocketError::InvalidMatchState);
-        };
 
         let mut participant = current_match.participants.get(&data.player_id).unwrap().clone();
         for participant_listener in self.participant_listeners.iter() {
