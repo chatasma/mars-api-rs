@@ -5,7 +5,7 @@ use crate::database::migrations::DatabaseMigration;
 
 pub struct ResetStatsMigration {}
 
-// resets stats for players, in specific, set stats objects to empty objects
+// resets stats for players, in specific, set stats/gamemodeStats objects to empty objects
 #[async_trait]
 impl DatabaseMigration for ResetStatsMigration {
     fn get_id(&self) -> String {
@@ -16,7 +16,7 @@ impl DatabaseMigration for ResetStatsMigration {
         info!("Resetting all player stats...");
         let update_result = database.players.update_many(
         doc! {},
-        doc! { "$set": {"stats": {}}},
+        doc! { "$set": {"stats": {}, "gamemodeStats": {}}},
         None
         ).await;
         match update_result {

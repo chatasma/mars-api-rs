@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::{socket::{r#match::match_events::MatchEndData, server::server_context::ServerContext, participant::participant_context::PlayerMatchResult}, database::models::{level::LevelGamemode, player::{GamemodeStats, Player}, death::DamageCause, r#match::{Match, DestroyableGoal}}};
 
 use super::{player_listener::PlayerListener, player_events::PlayerDeathData};
@@ -19,8 +20,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.kills += 1;
 
@@ -49,8 +49,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.deaths += 1;
 
@@ -81,8 +80,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 let prev_amount = stats.killstreaks.get(&amount.to_string()).unwrap_or(&0).to_owned();
                 stats.killstreaks.insert(amount.to_string(), prev_amount + 1);
@@ -100,8 +98,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
     ) {
         let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
         for gamemode in gamemodes {
-            let mut default_gamemode_stats = GamemodeStats::default();
-            let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+            let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
             stats.objectives.destroyable_block_destroys += block_count;
         };
@@ -117,8 +114,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
     ) {
         let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
         for gamemode in gamemodes {
-            let mut default_gamemode_stats = GamemodeStats::default();
-            let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+            let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
             stats.objectives.destroyable_destroys += 1;
         };
@@ -135,8 +131,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.core_leaks += 1;
                 stats.objectives.core_block_destroys += block_count;
@@ -154,8 +149,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.control_point_captures += 1;
             };
@@ -172,8 +166,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.flag_captures += 1;
                 stats.objectives.total_flag_hold_time += held_time;
@@ -190,8 +183,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.flag_pickups += 1;
             };
@@ -208,8 +200,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.flag_drops += 1;
                 stats.objectives.total_flag_hold_time += held_time;
@@ -226,8 +217,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.flag_defends += 1;
             };
@@ -244,8 +234,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.wool_captures += 1;
             };
@@ -261,8 +250,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.wool_pickups += 1;
             };
@@ -279,8 +267,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.wool_drops += 1;
             };
@@ -296,8 +283,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
 
                 stats.objectives.wool_defends += 1;
             };
@@ -314,8 +300,7 @@ impl PlayerListener for PlayerGamemodeStatListener {
         {
             let gamemodes = if !current_match.is_tracking_stats() { vec![LevelGamemode::Arcade] } else { current_match.level.gamemodes.clone() };
             for gamemode in gamemodes {
-                let mut default_gamemode_stats = GamemodeStats::default();
-                let stats = context.gamemode_stats.get_mut(&gamemode).unwrap_or(&mut default_gamemode_stats);
+                let stats = Self::get_gamemode_stats(&mut context.gamemode_stats, &gamemode);
                 let big_stats = end_data.get_stats_for_participant(&context.id);
                 for (block, freq) in big_stats.blocks.blocks_broken.iter() {
                     stats.blocks_broken.insert(block.to_owned(), freq.to_owned());
@@ -357,5 +342,17 @@ impl PlayerListener for PlayerGamemodeStatListener {
                 stats.game_playtime += participant.stats.game_playtime;
             };
         };
+    }
+}
+
+impl PlayerGamemodeStatListener {
+    fn get_gamemode_stats<'a, 'b>(
+        gamemode_stats: &'a mut HashMap<LevelGamemode, GamemodeStats>,
+        gamemode: &'b LevelGamemode
+    ) -> &'a mut GamemodeStats {
+        if !gamemode_stats.contains_key(gamemode) {
+            gamemode_stats.insert(gamemode.to_owned(), GamemodeStats::default());
+        }
+        gamemode_stats.get_mut(gamemode).unwrap()
     }
 }
