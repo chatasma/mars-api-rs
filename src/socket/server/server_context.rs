@@ -34,6 +34,7 @@ impl ServerContext {
     pub async fn call<T: Serialize>(&mut self, event_type: &EventType, data: T) {
         let packet = Packet { event: event_type.clone(), data };
         let body = serde_json::to_string(&packet).unwrap();
+        debug!("Sending {} to {}", &body, &self.id);
         let binary = Message::Binary(deflate_string(body.as_bytes()).unwrap());
         let _ = self.stream.send(binary).await;
     }
