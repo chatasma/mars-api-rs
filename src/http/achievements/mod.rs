@@ -39,7 +39,8 @@ async fn add_achievement(
         name,
         description, 
         metadata, 
-        agent
+        agent,
+        first_completion: None
     };
     state.database.save::<Achievement>(&new_achievement).await;
     return Ok(JsonResponder::from(new_achievement, Status::Ok));

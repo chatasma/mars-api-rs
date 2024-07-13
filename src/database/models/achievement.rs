@@ -24,7 +24,9 @@ pub struct Achievement {
     pub description: String,
     #[serde(rename = "category")]
     pub metadata: Option<AchievementMetadata>,
-    pub agent: Agent
+    pub agent: Agent,
+    #[serde(default)]
+    pub first_completion: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

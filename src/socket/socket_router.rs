@@ -2,6 +2,8 @@ use std::{collections::HashMap};
 
 
 use futures::future::join_all;
+use mongodb::bson::doc;
+use mongodb::options::UpdateOptions;
 use rocket::serde::{json::{serde_json, Value}, DeserializeOwned};
 
 use uuid::Uuid;
@@ -655,19 +657,30 @@ impl SocketRouter {
     }
 
     async fn on_achievement_complete(&mut self, data: PlayerAchievementData) -> Result<(), SocketError> {
-        // confirm the achievement exists
-        let achievement_exists = Database::find_by_id(&self.server.api_state.database.achievements, data.achievement_id.as_str()).await.is_some();
-        if !achievement_exists {
+        let achievement_id = data.achievement_id.as_str();
+        let database = &self.server.api_state.database;
+        let collection = &database.achievements;
+
+        if let Some(mut achievement) = Database::find_by_id(collection, achievement_id).await {
+            if achievement.first_completion.is_none() {
+                achievement.first_completion = Some(data.player.id.clone());
+                database.save(&achievement).await;
+            }
+        } else {
             return Ok(());
         }
+
         let mut player = unwrap_helper::return_default!(
-            self.server.api_state.player_cache.get(&self.server.api_state.database, data.player.name.as_str()).await,
-            Ok(())
-        );
+        self.server.api_state.player_cache.get(database, data.player.name.as_str()).await,
+        Ok(())
+    );
+
         player.stats.achievements.insert(data.achievement_id.clone(), AchievementData {
             completion_time: data.completion_time
         });
-        self.server.api_state.player_cache.set(&self.server.api_state.database, &player.name, &player, true).await;
+
+        self.server.api_state.player_cache.set(database, &player.name, &player, true).await;
+
         Ok(())
     }
 

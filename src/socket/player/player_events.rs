@@ -91,7 +91,7 @@ pub struct DisconnectPlayerData {
     pub reason: String
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerAchievementData { 
     pub player: SimplePlayer, 
