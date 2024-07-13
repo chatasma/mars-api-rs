@@ -30,5 +30,12 @@ impl DatabaseMigration for ResetStatsMigration {
                 warn!("Could not reset stats: {}", err);
             }
         };
+        info!("Resetting achievement first completions..");
+        database.achievements.update_many(
+            doc! {},
+            doc! {"$set": {"firstCompletion": null}},
+            None
+        ).await;
+        info!("Reset achievement first completions");
     }
 }
