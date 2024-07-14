@@ -155,6 +155,7 @@ pub struct FlagGoal {
 #[serde(rename_all = "camelCase")]
 pub struct WoolGoal {
     pub id: String,
+    pub name: String,
     pub owner_name: Option<String>,
     pub color: String
 }
