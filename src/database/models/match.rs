@@ -151,10 +151,15 @@ pub struct FlagGoal {
     pub color: String
 }
 
+fn default_wool_goal_name() -> String {
+    String::from("Unknown")
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WoolGoal {
     pub id: String,
+    #[serde(default = "default_wool_goal_name")]
     pub name: String,
     pub owner_name: Option<String>,
     pub color: String
