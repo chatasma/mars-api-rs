@@ -12,3 +12,7 @@ pub fn deflate_string(data: &[u8]) -> anyhow::Result<Vec<u8>> {
     encoder.write_all(data)?;
     Ok(encoder.finish()?)
 }
+
+pub fn enumify(target: &str) -> String {
+    target.trim().to_uppercase().replace(" ", "_")
+}
