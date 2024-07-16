@@ -81,7 +81,8 @@ pub struct PlayerXPGainData {
     pub player_id: String,
     pub gain: u32,
     pub reason: String,
-    pub notify: bool
+    pub notify: bool,
+    pub multiplier: Option<f32>
 }
 
 #[derive(Serialize, Deserialize)]

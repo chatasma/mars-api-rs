@@ -5,8 +5,10 @@ use mars_api_rs_derive::IdentifiableDocument;
 use mongodb::Collection;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use num_traits::ToPrimitive;
 
 use crate::{database::CollectionOwner, socket::{leaderboard::ScoreType, player::{player_xp_listener::PlayerXPListener, player_events::PlayerXPGainData}, server::server_context::ServerContext, event_type::EventType}};
+use crate::database::models::server::{ServerEvents, XPMultiplier};
 
 use super::{punishment::StaffNote, level::LevelGamemode, r#match::Match};
 
@@ -60,13 +62,34 @@ impl Player {
     }
 
     // TODO: Multipliers
-    pub async fn add_xp(&mut self, server_context: &mut ServerContext, raw_xp: u32, reason: &String, notify: bool, raw_only: bool) {
+    pub async fn add_xp(
+        &mut self,
+        server_context: &mut ServerContext,
+        raw_xp: u32,
+        reason: &String,
+        notify: bool,
+        raw_only: bool
+    ) {
         let use_exponential = server_context.api_state.config.options.use_exponential_exp;
         let original_level = self.stats.get_level(use_exponential);
-        let target_xp_increment = if raw_only { raw_xp } else { u32::max(PlayerXPListener::gain(raw_xp, original_level), raw_xp) };
+        let multiplier = match server_context.get_server_events().await {
+            Some(events) =>  {
+                match events.xp_multiplier {
+                    Some(multiplier) => multiplier.value,
+                    None => 1.0f32
+                }
+            }
+            None => 1.0f32
+        };
+        let multiplied = ((raw_xp as f32) * multiplier).to_u32().unwrap_or(raw_xp);
+        let target_xp_increment = if raw_only { multiplied } else { u32::max(PlayerXPListener::gain(raw_xp, original_level), multiplied) };
         self.stats.xp += target_xp_increment;
+        let used_multiplier = target_xp_increment == multiplied;
 
-        server_context.call(&EventType::PlayerXpGain, PlayerXPGainData { player_id: self.id.clone(), gain: target_xp_increment, reason: reason.clone(), notify }).await;
+            server_context.call(&EventType::PlayerXpGain, PlayerXPGainData {
+                player_id: self.id.clone(), gain: target_xp_increment,
+                reason: reason.clone(), notify, multiplier: if used_multiplier { Some(multiplier) } else { None }
+            }).await;
 
         server_context.api_state.leaderboards.xp.increment(&self.id_name(), Some(target_xp_increment)).await;
     }

@@ -7,6 +7,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 
 use crate::{database::models::r#match::Match, socket::event_type::EventType, util::string::deflate_string, MarsAPIState};
+use crate::database::models::server::ServerEvents;
 
 pub struct ServerContext {
     pub id: String,
@@ -27,6 +28,10 @@ impl ServerContext {
         self.api_state.redis.get(&self.get_current_match_id_key()).await.ok()
     }
 
+    pub async fn get_server_events(&self) -> Option<ServerEvents> {
+        self.api_state.redis.get(&self.get_server_events_key()).await.ok()
+    }
+
     pub async fn get_match(&self) -> Option<Match> {
         self.api_state.redis.get(&format!("match:{}", self.get_current_match_id().await.unwrap_or_else(|| "null".to_owned()))).await.ok()
     }
@@ -34,7 +39,6 @@ impl ServerContext {
     pub async fn call<T: Serialize>(&mut self, event_type: &EventType, data: T) {
         let packet = Packet { event: event_type.clone(), data };
         let body = serde_json::to_string(&packet).unwrap();
-        debug!("Sending {} to {}", &body, &self.id);
         let binary = Message::Binary(deflate_string(body.as_bytes()).unwrap());
         let _ = self.stream.send(binary).await;
     }
@@ -45,6 +49,10 @@ impl ServerContext {
 
     fn get_last_alive_time_key(&self) -> String {
         format!("server:{}:last_alive_time", self.id)
+    }
+
+    fn get_server_events_key(&self) -> String {
+        format!("server:{}:events", self.id)
     }
 }
 

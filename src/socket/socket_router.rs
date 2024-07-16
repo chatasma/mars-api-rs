@@ -381,7 +381,10 @@ impl SocketRouter {
     async fn on_destroyable_destroy(&mut self, data: DestroyableDestroyData) -> Result<(), SocketError> {
         let mut current_match = unwrap_helper::return_default!(self.server.get_match().await, Err(SocketError::InvalidMatchState));
         for contribution in data.contributions.iter() {
-            let mut participant = current_match.participants.get(&contribution.player_id).unwrap().clone();
+            let mut participant = match current_match.participants.get(&contribution.player_id) {
+                None => continue,
+                Some(participant) => participant.clone()
+            };
             for participant_listener in self.participant_listeners.iter() {
                  participant_listener.on_destroyable_destroy(
                      &mut self.server, 
@@ -490,7 +493,10 @@ impl SocketRouter {
     async fn on_flag_drop(&mut self, data: FlagDropData) -> Result<(), SocketError> {
         let mut current_match = unwrap_helper::return_default!(self.server.get_match().await, Err(SocketError::InvalidMatchState));
 
-        let mut participant = current_match.participants.get(&data.player_id).unwrap().clone();
+        let mut participant = match current_match.participants.get(&data.player_id) {
+            None => { return Ok(()) }
+            Some(participant) => participant.clone()
+        };
         for participant_listener in self.participant_listeners.iter() {
              participant_listener.on_flag_drop(&mut self.server, &mut current_match, &mut participant, data.held_time).await;
         };
