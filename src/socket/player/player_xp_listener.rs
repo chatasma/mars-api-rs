@@ -12,10 +12,10 @@ pub static XP_DRAW : u32 = 150;
 pub static XP_KILL : u32 = 40;
 pub static XP_DEATH : u32 = 1;
 pub static XP_FIRST_BLOOD : u32 = 7;
-pub static XP_WOOL_OBJECTIVE : u32 = 60;
-pub static XP_FLAG_OBJECTIVE : u32 = 150;
-pub static XP_FLAG_TIME_BOUNS : u32 = 100;
-pub static XP_POINT_CAPTURE_MAX : u32 = 100;
+pub static XP_WOOL_OBJECTIVE : u32 = 100;
+pub static XP_FLAG_OBJECTIVE : u32 = 50;
+pub static XP_FLAG_TIME_BOUNS : u32 = 50;
+pub static XP_POINT_CAPTURE_MAX : u32 = 40;
 pub static XP_DESTROYABLE_WHOLE : u32 = 200;
 pub static XP_KILLSTREAK_COEFFICIENT : u32 = 10;
 
