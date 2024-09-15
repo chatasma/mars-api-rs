@@ -30,3 +30,4 @@ flate2 = "1.0.24"
 enum_dispatch = "0.3.8"
 async-trait = "0.1.66"
 reqwest = { version = "0.11.17", features = ["json"] }
+rocket_cors = "0.6.0"

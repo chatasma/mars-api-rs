@@ -5,7 +5,8 @@ use std::{marker::PhantomData, sync::Arc, env, net::{Ipv4Addr, IpAddr}};
 use anyhow::anyhow;
 use config::{deserialize_mars_config, MarsConfig};
 use database::{Database, cache::{Cache, get_redis_pool, RedisAdapter}, models::{player::Player, r#match::Match}};
-use rocket::{Build, Rocket, Shutdown, Config, figment::Figment};
+use rocket::{figment::Figment, http::Method, Build, Config, Rocket, Shutdown};
+use rocket_cors::{AllowedOrigins, CorsOptions};
 use socket::leaderboard::MarsLeaderboards;
 use crate::database::migrations::MigrationExecutor;
 
@@ -82,8 +83,21 @@ fn rocket(state: MarsAPIState) -> Rocket<Build> {
     rocket_build
 }
 
+fn get_cors_configuration() -> CorsOptions {
+    CorsOptions::default()
+        .allowed_origins(AllowedOrigins::all())
+        .allowed_methods(
+            vec![Method::Get, Method::Post]
+                .into_iter()
+                .map(From::from)
+                .collect(),
+        )
+        .allow_credentials(true)
+}
+
 async fn spawn_rocket(state: MarsAPIState) -> Result<Shutdown, String> {
-    let rocket = match rocket(state).ignite().await {
+    let cors = get_cors_configuration().to_cors().unwrap();
+    let rocket = match rocket(state).attach(cors).ignite().await {
         Ok(rocket) => rocket,
         Err(rocket_err) => return Err(format!("{}", rocket_err))
     };
