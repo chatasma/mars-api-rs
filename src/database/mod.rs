@@ -1,23 +1,25 @@
 use std::{str::FromStr, time::Duration};
 use std::collections::HashSet;
 
-use mars_api_rs_macro::IdentifiableDocument;
-use mongodb::options::FindOptions;
-use mongodb::{options::{ClientOptions, FindOneOptions, UpdateOptions}, Client, Collection, bson::{doc, oid::ObjectId}, Cursor, results::DeleteResult};
-use models::tag::Tag;
-use rand::Rng;
-use rocket::serde::DeserializeOwned;
-use futures::StreamExt;
-use serde::Serialize;
 use anyhow::anyhow;
 use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use mars_api_rs_macro::IdentifiableDocument;
+use mongodb::{bson::{doc, oid::ObjectId}, Client, Collection, Cursor, options::{ClientOptions, FindOneOptions, UpdateOptions}, results::DeleteResult};
+use mongodb::options::FindOptions;
+use rand::Rng;
 use rocket::form::validate::Contains;
+use rocket::serde::DeserializeOwned;
+use serde::Serialize;
+
+use models::tag::Tag;
 
 use crate::{database::models::player::Player, util::r#macro::unwrap_helper};
 use crate::database::models::ip_identity::IpIdentity;
+use crate::database::models::player::SimplePlayer;
 use crate::util::validation::verbose_result_ok;
 
-use self::models::{achievement::Achievement, death::Death, level::Level, r#match::Match, punishment::Punishment, rank::Rank, session::Session};
+use self::models::{achievement::Achievement, death::Death, level::Level, punishment::Punishment, r#match::Match, rank::Rank, session::Session};
 
 pub mod models;
 pub mod migrations;
@@ -208,6 +210,13 @@ impl Database {
         let opts = FindOptions::builder().sort(doc! { "loadedAt": -1 }).limit(limit).build();
         let cursor = self.matches.find(doc! {}, Some(opts)).await.ok();
         Self::consume_cursor_into_owning_vec_option(cursor).await
+    }
+
+    pub async fn get_players_by_rank(&self, rank: &Rank) -> Vec<SimplePlayer> {
+        let cursor = self.players.find(doc! { "rankIds": rank.id.clone() }, None).await.ok();
+        let players = Self::consume_cursor_into_owning_vec_option(cursor).await;
+        let simple_players = players.into_iter().map(|player| player.to_simple()).collect::<Vec<_>>();
+        simple_players
     }
 }
 

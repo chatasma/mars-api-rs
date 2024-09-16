@@ -1,9 +1,12 @@
+use std::vec;
+
 use futures::future::join_all;
 use mongodb::bson::doc;
-use rocket::{Rocket, Build, State, serde::json::Json};
+use rocket::{Build, Rocket, serde::json::Json, State};
 use uuid::Uuid;
 
-use crate::{MarsAPIState, http::rank::payload::RankCreateRequest, database::{models::{rank::Rank, player::Player}, Database}, util::{error::ApiErrorResponder, time::get_u64_time_millis, auth::AuthorizationToken, r#macro::unwrap_helper}};
+use crate::{database::{Database, models::{player::Player, rank::Rank}}, http::rank::payload::RankCreateRequest, MarsAPIState, util::{auth::AuthorizationToken, error::ApiErrorResponder, r#macro::unwrap_helper, time::get_u64_time_millis}};
+use crate::database::models::player::SimplePlayer;
 
 use self::payload::RankUpdateRequest;
 
@@ -51,6 +54,16 @@ async fn get_ranks(state: &State<MarsAPIState>) -> Json<Vec<Rank>> {
 async fn get_rank_by_id(state: &State<MarsAPIState>, rank_id: &str) -> Result<Json<Rank>, ApiErrorResponder> {
     let rank = unwrap_helper::return_default!(Database::find_by_id(&state.database.ranks, rank_id).await, Err(ApiErrorResponder::missing_rank()));
     Ok(Json(rank))
+}
+
+#[get("/<rank_id>/players")]
+async fn get_players_by_rank_by_id(state: &State<MarsAPIState>, rank_id: &str) -> Result<Json<Vec<SimplePlayer>>, ApiErrorResponder> {
+    let rank = unwrap_helper::return_default!(Database::find_by_id(&state.database.ranks, rank_id).await, Err(ApiErrorResponder::missing_rank()));
+    if rank.apply_on_join || !rank.staff {
+        return Ok(Json(vec![]));
+    };
+    let players = Database::get_players_by_rank(&state.database, &rank).await;
+    Ok(Json(players))
 }
 
 
@@ -120,5 +133,5 @@ async fn update_rank(
 }
 
 pub fn mount(rocket: Rocket<Build>) -> Rocket<Build>  {
-    rocket.mount("/mc/ranks", routes![create_rank, get_ranks, get_rank_by_id, delete_rank, update_rank])
+    rocket.mount("/mc/ranks", routes![create_rank, get_ranks, get_rank_by_id, get_players_by_rank_by_id, delete_rank, update_rank])
 }
