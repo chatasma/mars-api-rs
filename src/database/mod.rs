@@ -2,6 +2,7 @@ use std::{str::FromStr, time::Duration};
 use std::collections::HashSet;
 
 use mars_api_rs_macro::IdentifiableDocument;
+use mongodb::options::FindOptions;
 use mongodb::{options::{ClientOptions, FindOneOptions, UpdateOptions}, Client, Collection, bson::{doc, oid::ObjectId}, Cursor, results::DeleteResult};
 use models::tag::Tag;
 use rand::Rng;
@@ -201,6 +202,12 @@ impl Database {
     pub async fn find_by_name<R>(&self, name: &str) -> Option<R>
         where R: CollectionOwner<R> + Serialize + IdentifiableDocument + DeserializeOwned + Unpin + Send + Sync {
         R::get_collection(&self).find_one(doc! { "nameLower": name.to_lowercase() }, None).await.unwrap_or(None)
+    }
+
+    pub async fn get_recent_matches(&self, limit: i64) -> Vec<Match> {
+        let opts = FindOptions::builder().sort(doc! { "loadedAt": -1 }).limit(limit).build();
+        let cursor = self.matches.find(doc! {}, Some(opts)).await.ok();
+        Self::consume_cursor_into_owning_vec_option(cursor).await
     }
 }
 

@@ -15,6 +15,16 @@ pub async fn matches(
     Ok(JsonResponder::ok(cached_match))
 }
 
+#[get("/?<limit>")]
+pub async fn recent_matches(
+    state: &State<MarsAPIState>,
+    limit: Option<i64>,
+) -> Result<JsonResponder<Vec<Match>>, ApiErrorResponder> {
+    let limit = limit.unwrap_or(5).min(10);
+    let matches = state.database.get_recent_matches(limit).await;
+    Ok(JsonResponder::ok(matches))
+}
+
 pub fn mount(rocket_build: Rocket<Build>) -> Rocket<Build> {
-    rocket_build.mount("/mc/matches", routes![matches])
+    rocket_build.mount("/mc/matches", routes![matches, recent_matches])
 }
